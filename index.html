@@ -187,13 +187,39 @@
             activeSceneIndex: null
         };
 
-        document.addEventListener('DOMContentLoaded', () => {
-            loadConfigFromLocalStorage();
-            setupEventListeners();
-            initSandboxTemplate();
-            showToast("🚀 平台加载完毕，按钮已就绪！", "🟢");
-        });
+        // ========== 辅助函数 ==========
+        function showToast(message, icon = "💡") {
+            const toast = document.getElementById('toastNotification');
+            document.getElementById('toastMsg').innerText = message;
+            document.getElementById('toastIcon').innerText = icon;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 4000);
+        }
 
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        function updateTimelineProgressLabel(progress) {
+            if (appState.activeSceneIndex === null) return;
+            const duration = appState.storyboard[appState.activeSceneIndex].duration;
+            document.getElementById('durationDisplay').innerText = `${(progress * duration).toFixed(1)}s / ${duration.toFixed(1)}s`;
+        }
+
+        // 进度条更新函数（供 iframe 回调）
+        window.navigatorUpdateLabel = function(progress) {
+            const scrubber = document.getElementById('animationTimelineScrubber');
+            if (scrubber) scrubber.value = Math.round(progress * 100);
+            updateTimelineProgressLabel(progress);
+        };
+
+        // ========== API 配置相关 ==========
         function loadConfigFromLocalStorage() {
             const cached = localStorage.getItem('svg_animate_api_config');
             if (cached) {
@@ -216,30 +242,6 @@
             showToast("✅ API 配置保存成功！", "🟢");
         }
 
-        function setupEventListeners() {
-            document.getElementById('toggleConfigBtn').addEventListener('click', (e) => {
-                e.preventDefault();
-                const panel = document.getElementById('apiConfigPanel');
-                panel.classList.toggle('hidden');
-            });
-
-            document.getElementById('saveConfigBtn').addEventListener('click', saveConfigToLocalStorage);
-            document.getElementById('apiProvider').addEventListener('change', (e) => updateProviderDefaults(e.target.value));
-            document.getElementById('chunkScriptBtn').addEventListener('click', handleScriptChunkingAndParsing);
-            document.getElementById('updatePreviewBtn').addEventListener('click', applyEditorCodeToSandbox);
-            document.getElementById('playAnimationBtn').addEventListener('click', () => sendToSandbox({type: 'play'}));
-            document.getElementById('pauseAnimationBtn').addEventListener('click', () => sendToSandbox({type: 'pause'}));
-            
-            document.getElementById('animationTimelineScrubber').addEventListener('input', (e) => {
-                const progress = e.target.value / 100;
-                sendToSandbox({type: 'seek', progress: progress});
-                updateTimelineProgressLabel(progress);
-            });
-
-            document.getElementById('sendAiChatBtn').addEventListener('click', sendAiChatMessage);
-            document.getElementById('aiChatInputText').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendAiChatMessage(); });
-        }
-
         function updateProviderDefaults(provider) {
             const endpoint = document.getElementById('apiEndpoint');
             const model = document.getElementById('apiModel');
@@ -259,21 +261,57 @@
             }
         }
 
+        async function fetchChatCompletions(messages) {
+            const config = appState.apiConfig;
+            const headers = { "Content-Type": "application/json" };
+            if (config.key) {
+                headers["Authorization"] = `Bearer ${config.key}`;
+            }
+            let url = config.endpoint;
+            if (!url.endsWith('/chat/completions')) {
+                url = url.replace(/\/$/, '') + '/chat/completions';
+            }
+            const response = await fetch(url, {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                    model: config.model,
+                    messages: messages,
+                    temperature: 0.2
+                })
+            });
+            if (!response.ok) throw new Error(`API 请求失败: ${response.status}`);
+            const data = await response.json();
+            return data.choices[0].message.content;
+        }
+
+        function cleanJsonMarkdown(text) {
+            let clean = text.trim();
+            if (clean.startsWith('```json')) clean = clean.substring(7);
+            else if (clean.startsWith('```')) clean = clean.substring(3);
+            if (clean.endsWith('```')) clean = clean.substring(0, clean.length - 3);
+            return clean.trim();
+        }
+
+        // ========== 分镜处理 ==========
         function chunkTextIntoSegments(text, limit = 2000) {
             const segments = [];
             let remaining = text.trim();
             while (remaining.length > 0) {
-                if (remaining.length <= limit) { segments.push(remaining); break; }
+                if (remaining.length <= limit) {
+                    segments.push(remaining);
+                    break;
+                }
                 let chunk = remaining.substring(0, limit);
-                let lastN = chunk.lastIndexOf('\n');
-                if (lastN > 0) {
-                    segments.push(remaining.substring(0, lastN).trim());
-                    remaining = remaining.substring(lastN).trim();
+                let lastNewline = chunk.lastIndexOf('\n');
+                if (lastNewline > 0) {
+                    segments.push(remaining.substring(0, lastNewline).trim());
+                    remaining = remaining.substring(lastNewline).trim();
                 } else {
-                    let lastP = Math.max(chunk.lastIndexOf('。'), chunk.lastIndexOf('？'), chunk.lastIndexOf('！'));
-                    if (lastP > 0) {
-                        segments.push(remaining.substring(0, lastP + 1).trim());
-                        remaining = remaining.substring(lastP + 1).trim();
+                    let lastPunct = Math.max(chunk.lastIndexOf('。'), chunk.lastIndexOf('？'), chunk.lastIndexOf('！'));
+                    if (lastPunct > 0) {
+                        segments.push(remaining.substring(0, lastPunct + 1).trim());
+                        remaining = remaining.substring(lastPunct + 1).trim();
                     } else {
                         segments.push(remaining.substring(0, limit).trim());
                         remaining = remaining.substring(limit).trim();
@@ -281,6 +319,15 @@
                 }
             }
             return segments;
+        }
+
+        async function requestStoryboardFromLLM(textChunk, current, total) {
+            const sysPrompt = `你是一个顶级科普分镜师。请把这段文案切分为适合科技/理学网格、图表动画的场景卡。必须返回严格的 JSON 数组格式，没有任何 Markdown 标记：
+[{"text": "配音原文", "visualDescription": "画面图形运动创意描述"}]
+不要返回任何别的东西。以下是文案：\n${textChunk}`;
+            const messages = [{ role: 'user', content: sysPrompt }];
+            const res = await fetchChatCompletions(messages);
+            return cleanJsonMarkdown(res);
         }
 
         async function handleScriptChunkingAndParsing() {
@@ -306,16 +353,19 @@
                 log.scrollTop = log.scrollHeight;
 
                 try {
-                    const sceneJson = await requestStoryboardFromLLM(chunks[i], i + 1, chunks.length);
+                    const sceneJson = await requestStoryboardFromLLM(chunks[i], i+1, chunks.length);
                     const parsed = JSON.parse(sceneJson);
                     parsed.forEach(scene => {
-                        let duration = parseFloat(( (scene.text || "").length / 3.3 ).toFixed(1));
+                        let duration = parseFloat(((scene.text || "").length / 3.3).toFixed(1));
                         appState.storyboard.push({
                             id: appState.storyboard.length + 1,
                             text: scene.text || "",
                             visualDescription: scene.visualDescription || "科技蓝色创意抽象背景",
                             duration: duration > 2 ? duration : 5,
-                            svg: "", css: "", js: "", chatHistory: []
+                            svg: "",
+                            css: "",
+                            js: "",
+                            chatHistory: []
                         });
                     });
                     renderStoryboardList();
@@ -329,63 +379,76 @@
             showToast("🎉 脚本分镜切分成功！", "🟢");
         }
 
-        async function requestStoryboardFromLLM(textChunk, current, total) {
-            const sysPrompt = `你是一个顶级科普分镜师。请把这段文案切分为适合科技/理学网格、图表动画的场景卡。必须返回严格的 JSON 数组格式，没有任何 Markdown 标记：
-[{"text": "配音原文", "visualDescription": "画面图形运动创意描述"}]
-不要返回任何别的东西。以下是文案：\n${textChunk}`;
-
-            const messages = [{ role: 'user', content: sysPrompt }];
-            const res = await fetchChatCompletions(messages);
-            return cleanJsonMarkdown(res);
-        }
-
-        function cleanJsonMarkdown(text) {
-            let clean = text.trim();
-            if (clean.startsWith('```json')) clean = clean.substring(7);
-            else if (clean.startsWith('```')) clean = clean.substring(3);
-            if (clean.endsWith('```')) clean = clean.substring(0, clean.length - 3);
-            return clean.trim();
-        }
-
+        // ========== 场景卡片渲染与交互 ==========
         function renderStoryboardList() {
             const container = document.getElementById('sceneCardContainer');
-            document.getElementById('sceneCountText').innerText = `共 ${appState.storyboard.length} 个分镜`;
+            const countSpan = document.getElementById('sceneCountText');
+            countSpan.innerText = `共 ${appState.storyboard.length} 个分镜`;
+
             if (appState.storyboard.length === 0) {
                 container.innerHTML = `<div class="text-xs text-gray-500 text-center w-full py-12">暂无分镜脚本</div>`;
                 return;
             }
-            container.innerHTML = "";
-            appState.storyboard.forEach((scene, index) => {
-                const isActive = appState.activeSceneIndex === index;
-                const isGen = scene.svg !== "";
+
+            container.innerHTML = '';
+            appState.storyboard.forEach((scene, idx) => {
+                const isActive = (appState.activeSceneIndex === idx);
                 const card = document.createElement('div');
-                card.className = `w-72 flex-shrink-0 bg-panelBg border-2 p-3 rounded-lg flex flex-col justify-between transition-all ${isActive ? 'border-accentBlue ring-2 ring-blue-900/40' : 'border-borderCool'}`;
-                card.style.height = "210px";
+                card.className = `scene-card w-72 flex-shrink-0 bg-panelBg border-2 p-3 rounded-lg flex flex-col justify-between transition-all ${isActive ? 'border-accentBlue ring-2 ring-blue-900/40' : 'border-borderCool'}`;
+                card.dataset.index = idx;
+                card.style.height = '210px';
                 card.innerHTML = `
                     <div class="flex justify-between items-center text-[10px] font-bold text-gray-400 mb-1">
                         <span>场景 #${scene.id}</span>
-                        <div><input type="number" step="0.1" value="${scene.duration}" class="w-10 bg-darkBg border border-borderCool text-center rounded text-[10px]" onchange="updateSceneDuration(${index}, this.value)"> 秒</div>
+                        <div><input type="number" step="0.1" value="${scene.duration}" class="duration-input w-10 bg-darkBg border border-borderCool text-center rounded text-[10px]" data-index="${idx}"> 秒</div>
                     </div>
-                    <div class="flex-1 overflow-y-auto text-[11px] text-gray-300 space-y-1 cursor-pointer" onclick="selectActiveScene(${index})">
-                        <div class="line-clamp-3" ondblclick="editSceneText(${index}, 'text')">${scene.text}</div>
-                        <div class="text-gray-400 italic bg-darkBg p-1 rounded line-clamp-2" ondblclick="editSceneText(${index}, 'visualDescription')">🎥 ${scene.visualDescription}</div>
+                    <div class="flex-1 overflow-y-auto text-[11px] text-gray-300 space-y-1 cursor-pointer select-text" data-select="${idx}">
+                        <div class="scene-text line-clamp-3" data-field="text" data-index="${idx}">${escapeHtml(scene.text)}</div>
+                        <div class="text-gray-400 italic bg-darkBg p-1 rounded line-clamp-2" data-field="visualDescription" data-index="${idx}">🎥 ${escapeHtml(scene.visualDescription)}</div>
                     </div>
                     <div class="flex justify-between items-center mt-2 pt-2 border-t border-borderCool">
-                        <span class="text-[9px] ${isGen ? 'text-accentGreen':'text-yellow-600'}">${isGen ? '● 已有动画':'○ 待生成'}</span>
-                        <button onclick="generateAnimationForScene(${index})" class="bg-accentBlue text-white text-[10px] px-2 py-0.5 rounded">生成动画</button>
+                        <span class="text-[9px] ${scene.svg ? 'text-accentGreen':'text-yellow-600'}">${scene.svg ? '● 已有动画':'○ 待生成'}</span>
+                        <button class="generate-btn bg-accentBlue text-white text-[10px] px-2 py-0.5 rounded" data-index="${idx}">生成动画</button>
                     </div>
                 `;
                 container.appendChild(card);
             });
         }
 
-        window.updateSceneDuration = function(i, v) { appState.storyboard[i].duration = parseFloat(v) || 5; };
-        window.editSceneText = function(i, f) {
-            let n = prompt("编辑内容:", appState.storyboard[i][f]);
-            if(n) { appState.storyboard[i][f] = n; renderStoryboardList(); }
-        };
+        function updateSceneDuration(index, value) {
+            if (appState.storyboard[index]) {
+                appState.storyboard[index].duration = parseFloat(value) || 5;
+            }
+        }
 
-        window.generateAnimationForScene = async function(index) {
+        function editSceneText(index, field) {
+            const newVal = prompt(`编辑 ${field === 'text' ? '配音文案' : '画面描述'}`, appState.storyboard[index][field]);
+            if (newVal !== null && newVal.trim() !== '') {
+                appState.storyboard[index][field] = newVal.trim();
+                renderStoryboardList();
+                if (appState.activeSceneIndex === index) {
+                    document.getElementById('editingSceneTitle').innerText = `分镜场景 #${appState.storyboard[index].id}`;
+                }
+            }
+        }
+
+        function selectActiveScene(index) {
+            if (index < 0 || index >= appState.storyboard.length) return;
+            appState.activeSceneIndex = index;
+            const scene = appState.storyboard[index];
+            document.getElementById('editingSceneTitle').innerText = `分镜场景 #${scene.id}`;
+            document.getElementById('svgCodeEditor').value = scene.svg || '';
+            document.getElementById('gsapCodeEditor').value = scene.js || '';
+            renderStoryboardList();
+            applyEditorCodeToSandbox();
+        }
+
+        async function generateAnimationForScene(index) {
+            if (!appState.apiConfig.key) {
+                showToast("🔑 请先配置 API Key！", "🟡");
+                document.getElementById('apiConfigPanel').classList.remove('hidden');
+                return;
+            }
             selectActiveScene(index);
             const scene = appState.storyboard[index];
             showToast(`🚀 正在让 AI 编写动画代码...`, "🔮");
@@ -401,95 +464,23 @@
             try {
                 const res = await fetchChatCompletions([{ role: 'user', content: prompt }]);
                 const parsed = JSON.parse(cleanJsonMarkdown(res));
-                scene.svg = parsed.svg || ""; scene.css = parsed.css || ""; scene.js = parsed.js || "";
+                scene.svg = parsed.svg || "";
+                scene.css = parsed.css || "";
+                scene.js = parsed.js || "";
                 document.getElementById('svgCodeEditor').value = scene.svg;
                 document.getElementById('gsapCodeEditor').value = scene.js;
                 renderStoryboardList();
                 applyEditorCodeToSandbox();
                 showToast("🎉 动画代码已装载！", "🟢");
             } catch (err) {
+                console.error(err);
                 showToast("❌ 格式解析失败，请点击重新生成", "🔴");
             }
-        };
-
-        async function sendAiChatMessage() {
-            if (appState.activeSceneIndex === null) { showToast("👉 请先选中一个分镜场景", "🟡"); return; }
-            const input = document.getElementById('aiChatInputText');
-            const val = input.value.trim();
-            if (!val) return;
-
-            appendChatBubble('user', val);
-            input.value = "";
-            const bubbleId = appendChatBubble('assistant', '思考修改中...');
-            const scene = appState.storyboard[appState.activeSceneIndex];
-
-            const p = `当前SVG:\n${scene.svg}\n当前JS:\n${scene.js}\n用户修改意见：${val}\n请修改并最终在尾部附带 \`\`\`json 格式的完整代码块，包含 svg, css, js 三项。`;
-
-            try {
-                const res = await fetchChatCompletions([{ role: 'user', content: p }]);
-                const match = res.match(/```json\s*([\s\S]*?)\s*```/);
-                if (match && match[1]) {
-                    const parsed = JSON.parse(match[1].trim());
-                    scene.svg = parsed.svg; scene.css = parsed.css; scene.js = parsed.js;
-                    document.getElementById('svgCodeEditor').value = scene.svg;
-                    document.getElementById('gsapCodeEditor').value = scene.js;
-                    applyEditorCodeToSandbox();
-                }
-                document.getElementById(bubbleId).innerHTML = `<p class="leading-relaxed">${res.split('```json')[0].replace(/\n/g, '<br>')}</p>`;
-                renderStoryboardList();
-            } catch(e) {
-                document.getElementById(bubbleId).innerText = "❌ 调教失败，请再试一次";
-            }
         }
 
-        function appendChatBubble(role, txt) {
-            const box = document.getElementById('aiChatBubbleHistory');
-            const id = 'b_' + Date.now();
-            const div = document.createElement('div');
-            div.id = id;
-            div.className = role === 'user' ? 'bg-blue-900/20 p-2 rounded border border-blue-800/40 ml-4' : 'bg-purple-900/10 p-2 rounded border border-purple-800/40 mr-4';
-            div.innerHTML = `<b>${role==='user'?'我':'AI'}：</b>${txt}`;
-            box.appendChild(div);
-            box.scrollTop = box.scrollHeight;
-            return id;
-        }
-
-        window.navigatorUpdateLabel = function(prog) {
-            const scrubber = document.getElementById('animationTimelineScrubber');
-            if(scrubber) scrubber.value = Math.round(prog * 100);
-            updateTimelineProgressLabel(prog);
-        };
-
-        window.selectActiveScene = function(i) {
-            appState.activeSceneIndex = i;
-            const scene = appState.storyboard[i];
-            document.getElementById('editingSceneTitle').innerText = `分镜场景 #${scene.id}`;
-            document.getElementById('svgCodeEditor').value = scene.svg || "";
-            document.getElementById('gsapCodeEditor').value = scene.js || "";
-            renderStoryboardList();
-            applyEditorCodeToSandbox();
-        };
-
-        async function fetchChatCompletions(msgs) {
-            const config = appState.apiConfig;
-            const headers = { "Content-Type": "application/json" };
-            if (config.key) {
-                headers["Authorization"] = `Bearer ${config.key}`;
-            }
-            let url = config.endpoint.endsWith('/chat/completions') ? config.endpoint : `${config.endpoint}/chat/completions`;
-            
-            const response = await fetch(url, {
-                method: "POST", headers: headers,
-                body: JSON.stringify({ model: config.model, messages: msgs, temperature: 0.2 })
-            });
-            if (!response.ok) throw new Error("API握手失败");
-            const data = await response.json();
-            return data.choices[0].message.content;
-        }
-
+        // ========== 沙盒与预览 ==========
         let sandboxTemplate = "";
         function initSandboxTemplate() {
-            // 【重点修复区域】：已将包含在字符串中的所有 </script> 替换为 <\/script>，防止浏览器 HTML 解析器提早截断执行栈
             sandboxTemplate = `<!DOCTYPE html><html><head><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#090d16;display:flex;justify-content:center;align-items:center;}{CSS}</style><script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"><\/script><script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/TextPlugin.min.js"><\/script><script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/MotionPathPlugin.min.js"><\/script></head><body><div style="width:100%;height:100%;">{SVG}</div><script>gsap.registerPlugin(TextPlugin,MotionPathPlugin);window.__timeline=gsap.timeline({paused:true});window.addEventListener('message',(e)=>{const d=e.data;if(d.type==='seek')window.__timeline.progress(d.progress);else if(d.type==='play')window.__timeline.play();else if(d.type==='pause')window.__timeline.pause();});window.__timeline.eventCallback("onUpdate",()=>{window.parent.postMessage({type:'onUpdate',progress:window.__timeline.progress()},'*');});try{{JS}}catch(err){console.error(err);}<\/script></body></html>`;
             
             window.addEventListener('message', (e) => {
@@ -511,22 +502,118 @@
 
         function sendToSandbox(msg) {
             const frame = document.getElementById('previewSandbox');
-            if(frame && frame.contentWindow) frame.contentWindow.postMessage(msg, '*');
+            if (frame && frame.contentWindow) frame.contentWindow.postMessage(msg, '*');
         }
 
-        function updateTimelineProgressLabel(p) {
-            if (appState.activeSceneIndex === null) return;
-            const dur = appState.storyboard[appState.activeSceneIndex].duration;
-            document.getElementById('durationDisplay').innerText = `${(p*dur).toFixed(1)}s / ${dur.toFixed(1)}s`;
+        // ========== AI 调教对话 ==========
+        function appendChatBubble(role, text) {
+            const container = document.getElementById('aiChatBubbleHistory');
+            const div = document.createElement('div');
+            div.className = role === 'user' ? 'bg-blue-900/20 p-2 rounded border border-blue-800/40 ml-4' : 'bg-purple-900/10 p-2 rounded border border-purple-800/40 mr-4';
+            div.innerHTML = `<b>${role === 'user' ? '我' : 'AI'}：</b> ${text.replace(/\n/g, '<br>')}`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            return div;
         }
 
-        function showToast(m, icon = "💡") {
-            const t = document.getElementById('toastNotification');
-            document.getElementById('toastMsg').innerText = m;
-            document.getElementById('toastIcon').innerText = icon;
-            t.classList.remove('hidden');
-            setTimeout(() => t.classList.add('hidden'), 4000);
+        async function sendAiChatMessage() {
+            if (appState.activeSceneIndex === null) {
+                showToast("👉 请先选中一个分镜场景", "🟡");
+                return;
+            }
+            const input = document.getElementById('aiChatInputText');
+            const userMsg = input.value.trim();
+            if (!userMsg) return;
+            appendChatBubble('user', userMsg);
+            input.value = "";
+
+            const thinkingDiv = appendChatBubble('assistant', '思考修改中...');
+            const scene = appState.storyboard[appState.activeSceneIndex];
+
+            const prompt = `当前SVG:\n${scene.svg}\n当前JS:\n${scene.js}\n用户修改意见：${userMsg}\n请修改并最终在尾部附带 \`\`\`json 格式的完整代码块，包含 svg, css, js 三项。`;
+
+            try {
+                const res = await fetchChatCompletions([{ role: 'user', content: prompt }]);
+                const jsonMatch = res.match(/```json\s*([\s\S]*?)\s*```/);
+                if (jsonMatch && jsonMatch[1]) {
+                    const parsed = JSON.parse(jsonMatch[1].trim());
+                    scene.svg = parsed.svg;
+                    scene.css = parsed.css;
+                    scene.js = parsed.js;
+                    document.getElementById('svgCodeEditor').value = scene.svg;
+                    document.getElementById('gsapCodeEditor').value = scene.js;
+                    applyEditorCodeToSandbox();
+                    renderStoryboardList();
+                    thinkingDiv.innerHTML = `<b>AI：</b> ${res.split('```json')[0].replace(/\n/g, '<br>')}`;
+                } else {
+                    thinkingDiv.innerHTML = `<b>AI：</b> 未能提取代码块，请重试。`;
+                }
+            } catch(e) {
+                console.error(e);
+                thinkingDiv.innerHTML = `<b>AI：</b> ❌ 调教失败，请再试一次`;
+            }
         }
+
+        // ========== 事件绑定 ==========
+        function setupEventListeners() {
+            document.getElementById('toggleConfigBtn').addEventListener('click', () => {
+                document.getElementById('apiConfigPanel').classList.toggle('hidden');
+            });
+            document.getElementById('saveConfigBtn').addEventListener('click', saveConfigToLocalStorage);
+            document.getElementById('apiProvider').addEventListener('change', (e) => updateProviderDefaults(e.target.value));
+            document.getElementById('chunkScriptBtn').addEventListener('click', handleScriptChunkingAndParsing);
+            document.getElementById('updatePreviewBtn').addEventListener('click', applyEditorCodeToSandbox);
+            document.getElementById('playAnimationBtn').addEventListener('click', () => sendToSandbox({type: 'play'}));
+            document.getElementById('pauseAnimationBtn').addEventListener('click', () => sendToSandbox({type: 'pause'}));
+            document.getElementById('animationTimelineScrubber').addEventListener('input', (e) => {
+                const progress = e.target.value / 100;
+                sendToSandbox({type: 'seek', progress: progress});
+                updateTimelineProgressLabel(progress);
+            });
+            document.getElementById('sendAiChatBtn').addEventListener('click', sendAiChatMessage);
+            document.getElementById('aiChatInputText').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') sendAiChatMessage();
+            });
+
+            // 卡片容器事件委托
+            const container = document.getElementById('sceneCardContainer');
+            container.addEventListener('click', (e) => {
+                const generateBtn = e.target.closest('.generate-btn');
+                if (generateBtn) {
+                    const idx = parseInt(generateBtn.dataset.index);
+                    if (!isNaN(idx)) generateAnimationForScene(idx);
+                    return;
+                }
+                const selectDiv = e.target.closest('[data-select]');
+                if (selectDiv) {
+                    const idx = parseInt(selectDiv.dataset.select);
+                    if (!isNaN(idx)) selectActiveScene(idx);
+                    return;
+                }
+                const textDiv = e.target.closest('[data-field]');
+                if (textDiv) {
+                    const idx = parseInt(textDiv.dataset.index);
+                    const field = textDiv.dataset.field;
+                    if (!isNaN(idx) && field) editSceneText(idx, field);
+                    return;
+                }
+            });
+            container.addEventListener('change', (e) => {
+                const durationInput = e.target.closest('.duration-input');
+                if (durationInput) {
+                    const idx = parseInt(durationInput.dataset.index);
+                    if (!isNaN(idx)) updateSceneDuration(idx, durationInput.value);
+                }
+            });
+        }
+
+        // ========== 初始化 ==========
+        document.addEventListener('DOMContentLoaded', () => {
+            loadConfigFromLocalStorage();
+            setupEventListeners();
+            initSandboxTemplate();
+            showToast("🚀 平台加载完毕，按钮已就绪！", "🟢");
+        });
     </script>
 </body>
 </html>

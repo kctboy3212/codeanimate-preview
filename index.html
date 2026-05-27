@@ -1,1 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeAnimate AI - 云端预览工作台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* 隐藏滚动条但保留滚动功能 */
+   .no-scrollbar::-webkit-scrollbar { display: none; }
+   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden font-sans">
 
+  <header class="h-14 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 backdrop-blur">
+    <div class="flex items-center gap-3">
+      <span class="text-xl">⚡</span>
+      <h1 class="font-bold text-base tracking-wide bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+        CodeAnimate AI Cloud Playground
+      </h1>
+      <span class="px-2 py-0.5 text-[10px] font-mono bg-blue-500/10 text-blue-400 rounded-full border border-blue-500/20">
+        Pure Frontend Preview v1.0
+      </span>
+    </div>
+    <div class="flex items-center gap-3">
+      <button onclick="alert('本地版中，此按钮将唤起本地无头浏览器，通过管道将 PNG 流与 FFmpeg 压制为 MP4！')" class="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded text-xs font-semibold transition shadow-lg shadow-indigo-950/50">
+        导出成品视频
+      </button>
+    </div>
+  </header>
+
+  <main class="flex flex-1 overflow-hidden">
+    
+    <section class="w-80 border-r border-slate-800 bg-slate-900/30 flex flex-col">
+      <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+        <h2 class="font-bold text-xs text-slate-400 uppercase tracking-wider">分镜头大纲 (Storyboard)</h2>
+        <span class="text-[10px] text-slate-500">字数自动算时</span>
+      </div>
+      <div id="scenes-container" class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
+        </div>
+    </section>
+
+    <section class="flex-1 bg-slate-950 flex flex-col items-center justify-center p-6 relative">
+      <div class="w-full max-w-3xl aspect-video bg-slate-900 rounded-xl border border-slate-800/80 shadow-2xl relative overflow-hidden">
+        <iframe id="preview-sandbox" class="w-full h-full border-none" sandbox="allow-scripts allow-same-origin"></iframe>
+        
+        <div class="absolute top-3 left-3 px-2 py-1 bg-slate-950/80 backdrop-blur text-[10px] font-mono text-emerald-400 rounded border border-emerald-500/20 flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+           deterministic timeline sync active
+        </div>
+      </div>
+      
+      <div class="w-full max-w-3xl mt-6 bg-slate-900/60 p-4 border border-slate-800/80 rounded-xl backdrop-blur">
+        <div class="flex items-center justify-between text-xs text-slate-400 font-mono mb-3">
+          <div class="flex items-center gap-2">
+            <button id="btn-play" class="bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 py-1.5 rounded-lg transition active:scale-95">
+              播放预览
+            </button>
+          </div>
+          <span id="time-display" class="font-bold text-slate-300">0.00s / 0.00s</span>
+        </div>
+        <input id="timeline-slider" type="range" class="w-full accent-blue-500 bg-slate-800 cursor-pointer h-1.5 rounded-lg appearance-none" min="0" max="10" step="0.033" value="0">
+      </div>
+    </section>
+
+    <section class="w-96 border-l border-slate-800 bg-slate-900/30 flex flex-col p-4 space-y-4">
+      <div class="border-b border-slate-800 pb-2">
+        <h2 class="font-bold text-xs text-slate-400 uppercase tracking-wider">AI 代码编译器 (模拟器)</h2>
+      </div>
+      
+      <div>
+        <label class="text-[11px] text-slate-400 font-medium block mb-1.5">画面描述 (AI Prompt)</label>
+        <textarea id="scene-prompt" readonly class="w-full h-24 bg-slate-900 border border-slate-800 rounded-lg p-3 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50 resize-none font-sans leading-relaxed cursor-not-allowed" placeholder="大模型 Prompt..."></textarea>
+      </div>
+
+      <div class="flex-1 flex flex-col">
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="text-[11px] text-slate-400 font-medium">GSAP 物理轨迹动画代码</label>
+          <span class="text-[10px] text-emerald-500 font-mono">timeline: tl</span>
+        </div>
+        <textarea id="code-editor" readonly class="flex-1 w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-[11px] text-emerald-400 font-mono focus:outline-none focus:border-blue-500/50 resize-none cursor-not-allowed" placeholder="// GSAP 动画代码..."></textarea>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // 模拟 3 组大模型生成的、完全符合确定性物理 Seek 约束的 SVG/GSAP 数据结构 [7]
+    const demoProject = {
+      projectId: "proj_cloud_demo",
+      fps: 30,
+      scenes:
+            tl.fromTo("#pkg-safe", { x: 0, y: 0, scale: 0.2, opacity: 0 }, { opacity: 1, scale: 1, duration: 1.2, ease: "back.out" }, 1);
+            tl.to("#pkg-safe", { x: 700, duration: 3, ease: "power1.inOut" }, 2.2); // 移动到墙体前
+            tl.to("#pkg-safe", { x: 1300, y: 140, scale: 0.8, duration: 3, ease: "power1.inOut" }, 5.2); // 穿墙并进入路由器
+
+            // 红色数据包：移动至防火墙处，发生强烈碰撞物理反应，最后渐隐消散 [7]
+            tl.fromTo("#pkg-danger", { x: 0, y: 0, scale: 0.2, opacity: 0 }, { opacity: 1, scale: 1, duration: 1.2, ease: "back.out" }, 2);
+            tl.to("#pkg-danger", { x: 675, duration: 2.8, ease: "power1.inOut" }, 3.2); // 移动到墙体处
+            tl.to("#pkg-danger", { scale: 1.4, fill: "#f43f5e", duration: 0.2, yoyo: true, repeat: 1, ease: "sine.inOut" }, 6.0); // 碰撞挤压
+            tl.to("#pkg-danger", { y: 100, opacity: 0, scale: 0.1, duration: 1.5, ease: "power2.out" }, 6.4); // 拦截向下滑落消散
+          `
+        },
+        {
+          sceneId: "scene-2",
+          order: 2,
+          narrationText: "当安全数据流进入内网网关后，数据库群组开始对请求进行高效分析，并快速回传响应数据包。",
+          durationSeconds: 11.4, // 38 字 * 0.3s = 11.4s
+          visualPrompt: "左侧绘制一个网关节点，右侧绘制三个数据库堆叠图标。一条亮绿色的数据脉冲从网关出发，到达数据库，数据库依次闪烁蓝色光晕，随后一条反向的蓝色脉冲流回网关。",
+          svgElements: `
+            <g id="gateway">
+              <rect x="200" y="440" width="160" height="200" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="4" />
+              <text x="280" y="545" text-anchor="middle" fill="#94a3b8" font-size="20" font-weight="bold">GATEWAY</text>
+            </g>
+
+            <g id="db-group">
+              <rect class="db-node" id="db-1" x="1400" y="300" width="220" height="120" rx="15" fill="#1e293b" stroke="#475569" stroke-width="4" />
+              <rect class="db-node" id="db-2" x="1400" y="460" width="220" height="120" rx="15" fill="#1e293b" stroke="#475569" stroke-width="4" />
+              <rect class="db-node" id="db-3" x="1400" y="620" width="220" height="120" rx="15" fill="#1e293b" stroke="#475569" stroke-width="4" />
+              <text x="1510" y="370" text-anchor="middle" fill="#64748b" font-size="18">DB-MASTER</text>
+              <text x="1510" y="530" text-anchor="middle" fill="#64748b" font-size="18">DB-SLAVE 1</text>
+              <text x="1510" y="690" text-anchor="middle" fill="#64748b" font-size="18">DB-SLAVE 2</text>
+            </g>
+
+            <path id="stream-path" d="M 360 540 L 1400 540" stroke="#334155" stroke-width="8" stroke-linecap="round" />
+            <circle id="pulse-forward" cx="360" cy="540" r="20" fill="#10b981" opacity="0" />
+            <circle id="pulse-backward" cx="1400" cy="540" r="20" fill="#3b82f6" opacity="0" />
+          `,
+          animationCode: `
+            // 网关与数据库入场
+            tl.from("#gateway", { x: -100, opacity: 0, duration: 1.5, ease: "back.out" }, 0.5);
+            tl.from("#db-group", { x: 100, opacity: 0, duration: 1.5, ease: "back.out" }, 0.8);
+
+            // 前行脉冲信号流动 (GateWay -> DB)
+            tl.to("#pulse-forward", { opacity: 1, duration: 0.3 }, 2.0);
+            tl.to("#pulse-forward", { cx: 1400, duration: 2.5, ease: "power2.inOut" }, 2.0);
+            tl.to("#pulse-forward", { opacity: 0, duration: 0.2 }, 4.3);
+
+            // 数据库集群收到信号，发生高亮缩放级联响应
+            tl.to(".db-node", { stroke: "#10b981", scale: 1.05, transformOrigin: "center center", duration: 0.4, stagger: 0.2, ease: "sine.inOut" }, 4.3);
+            tl.to(".db-node", { stroke: "#3b82f6", scale: 1.0, duration: 0.4, stagger: 0.2, ease: "sine.inOut" }, 5.5);
+
+            // 反馈信号脉冲流动 (DB -> GateWay) [1]
+            tl.to("#pulse-backward", { opacity: 1, duration: 0.3 }, 6.5);
+            tl.to("#pulse-backward", { cx: 360, duration: 2.5, ease: "power2.inOut" }, 6.5);
+            tl.to("#pulse-backward", { opacity: 0, scale: 2, duration: 0.5 }, 9.0);
+            tl.to("#gateway", { stroke: "#10b981", duration: 0.5, yoyo: true, repeat: 1 }, 9.0);
+          `
+        }
+      ]
+    };
+
+    let activeSceneId = "scene-1";
+    let isPlaying = false;
+    let playStartTime = 0;
+    let pausedTime = 0;
+    let requestFrameId = null;
+
+    const previewSandbox = document.getElementById('preview-sandbox');
+    const scenesContainer = document.getElementById('scenes-container');
+    const timelineSlider = document.getElementById('timeline-slider');
+    const timeDisplay = document.getElementById('time-display');
+    const btnPlay = document.getElementById('btn-play');
+    const scenePrompt = document.getElementById('scene-prompt');
+    const codeEditor = document.getElementById('code-editor');
+
+    // ==================== 1. 计算字数折算时长 ====================
+    function calculateDuration(text) {
+      const length = text.trim().length;
+      // 基于 D = L * 0.3s 折算时长，最少保证播放 2s
+      return Math.max(2.0, parseFloat((length * 0.3).toFixed(2)));
+    }
+
+    // ==================== 2. 刷新分镜卡片 UI ====================
+    function renderSceneCards() {
+      scenesContainer.innerHTML = '';
+      demoProject.scenes.forEach((scene) => {
+        const isActive = scene.sceneId === activeSceneId;
+        const duration = calculateDuration(scene.narrationText);
+        scene.durationSeconds = duration; // 动态写入数据层
+
+        const card = document.createElement('div');
+        card.className = `p-4 border rounded-xl transition cursor-pointer select-none flex flex-col gap-2 ${
+          isActive 
+           ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-950/20' 
+            : 'border-slate-800 bg-slate-900/40 hover:bg-slate-900/80 hover:border-slate-700'
+        }`;
+        
+        // 点击选择对应分镜
+        card.onclick = () => selectScene(scene.sceneId);
+
+        card.innerHTML = `
+          <div class="flex justify-between items-center text-[10px] font-mono">
+            <span class="${isActive? 'text-blue-400 font-bold' : 'text-slate-500'}">SCENE #${scene.order}</span>
+            <span class="px-1.5 py-0.5 rounded bg-slate-950 text-slate-400 font-bold">${duration}s</span>
+          </div>
+          <textarea class="w-full bg-transparent text-xs text-slate-200 resize-none focus:outline-none focus:ring-0 leading-relaxed">${scene.narrationText}</textarea>
+        `;
+
+        // 绑定文本实时更新重算时长
+        const textarea = card.querySelector('textarea');
+        textarea.onclick = (e) => e.stopPropagation(); // 阻止卡片点击穿透
+        textarea.oninput = (e) => {
+          scene.narrationText = e.target.value;
+          renderSceneCards(); // 全局刷新重算
+        };
+
+        scenesContainer.appendChild(card);
+      });
+      updateTimelineLimits();
+    }
+
+    // ==================== 3. 选定分镜与装载沙盒 ====================
+    function selectScene(sceneId) {
+      // 切换分镜时强制停止播放
+      if (isPlaying) {
+        isPlaying = false;
+        cancelAnimationFrame(requestFrameId);
+        btnPlay.innerText = "播放预览";
+      }
+
+      activeSceneId = sceneId;
+      const scene = demoProject.scenes.find(s => s.sceneId === sceneId);
+      
+      scenePrompt.value = scene.visualPrompt;
+      codeEditor.value = scene.animationCode.trim().replace(/^\s+/gm, ''); // 清理首尾多余空格
+      
+      // 刷新左侧 UI 高亮
+      renderSceneCards();
+      
+      // 将数据拼装并写入 iframe 所见即所得沙盒
+      loadIFrameSandbox(scene);
+      
+      // 时间轴归零并更新 Seek
+      setTimeout(() => seekTo(0), 150);
+    }
+
+    function loadIFrameSandbox(scene) {
+      const sandboxHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"><\/script>
+          <style>
+            body {
+              margin: 0;
+              padding: 0;
+              background-color: #090d16;
+              width: 1920px;
+              height: 1080px;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              overflow: hidden;
+              user-select: none;
+              font-family: system-ui, -apple-system, sans-serif;
+            }
+            #canvas {
+              width: 100%;
+              height: 100%;
+            }
+          </style>
+        </head>
+        <body>
+          <svg id="canvas" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+            ${scene.svgElements}
+          </svg>
+          <script>
+            // 初始化 GSAP 求索时间轴 [2]
+            const tl = gsap.timeline({ paused: true });
+            window.__currentTimeline = tl;
+
+            // 注入运动描述
+            ${scene.animationCode}
+
+            // 监听主外壳时间轴 seek 派发的 postMessage 指令 
+            window.addEventListener('message', (event) => {
+              if (event.data && event.data.type === 'SEEK_TIME') {
+                const targetTime = event.data.time;
+                if (window.__currentTimeline) {
+                  window.__currentTimeline.seek(targetTime);
+                }
+              }
+            });
+          <\/script>
+        </body>
+        </html>
+      `;
+      previewSandbox.srcdoc = sandboxHtml;
+    }
+
+    // ==================== 4. 游标控制与 Seeking 机制 ====================
+    function updateTimelineLimits() {
+      const scene = demoProject.scenes.find(s => s.sceneId === activeSceneId);
+      const duration = scene? scene.durationSeconds : 10;
+      timelineSlider.max = duration;
+      timeDisplay.innerText = `0.00s / ${duration.toFixed(2)}s`;
+    }
+
+    function seekTo(time) {
+      timelineSlider.value = time;
+      const maxTime = parseFloat(timelineSlider.max);
+      timeDisplay.innerText = `${time.toFixed(2)}s / ${maxTime.toFixed(2)}s`;
+      
+      // 向 iframe 中发送高精度 SEEK_TIME 消息 
+      if (previewSandbox.contentWindow) {
+        previewSandbox.contentWindow.postMessage({ type: 'SEEK_TIME', time }, '*');
+      }
+    }
+
+    // 拖动滑块时触发 Seeking
+    timelineSlider.addEventListener('input', (e) => {
+      if (isPlaying) {
+        isPlaying = false;
+        cancelAnimationFrame(requestFrameId);
+        btnPlay.innerText = "播放预览";
+      }
+      seekTo(parseFloat(e.target.value));
+    });
+
+    // ==================== 5. 播放/暂停 动画时钟驱动 (Ticker) ====================
+    btnPlay.onclick = () => {
+      if (isPlaying) {
+        isPlaying = false;
+        cancelAnimationFrame(requestFrameId);
+        btnPlay.innerText = "播放预览";
+        pausedTime = parseFloat(timelineSlider.value);
+      } else {
+        isPlaying = true;
+        btnPlay.innerText = "暂停播放";
+        
+        // 逻辑时钟：物理时间起点减去当前滑块所在的时间戳 [8]
+        const currentProgress = parseFloat(timelineSlider.value);
+        const maxTime = parseFloat(timelineSlider.max);
+        
+        // 如果播放到了终点，则从头开始循环播放
+        const startOffset = currentProgress >= maxTime? 0 : currentProgress;
+        playStartTime = performance.now() - startOffset * 1000;
+        
+        tick();
+      }
+    };
+
+    function tick() {
+      if (!isPlaying) return;
+      const elapsed = (performance.now() - playStartTime) / 1000;
+      const maxTime = parseFloat(timelineSlider.max);
+
+      if (elapsed >= maxTime) {
+        seekTo(maxTime);
+        isPlaying = false;
+        btnPlay.innerText = "播放预览";
+        return;
+      }
+
+      seekTo(elapsed);
+      requestFrameId = requestAnimationFrame(tick);
+    }
+
+    // 页面初次加载初始化
+    selectScene("scene-1");
+  </script>
+</body>
+</html>

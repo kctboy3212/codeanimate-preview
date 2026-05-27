@@ -6,8 +6,8 @@
   <title>CodeAnimate AI - 互动科普视频工作台</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-   .no-scrollbar::-webkit-scrollbar { display: none; }
-   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     iframe { background-color: #090d16; }
   </style>
 </head>
@@ -42,7 +42,7 @@
           长文案导入
         </button>
         <button id="tab-storyboard-btn" onclick="switchLeftTab('storyboard')" class="flex-1 text-xs font-bold text-slate-500">
-          分镜脚本 (<span id="scene-counter">0</span>)
+          分镜脚本 (<span id="scene-counter">1</span>)
         </button>
       </div>
 
@@ -57,8 +57,7 @@
 
         <div id="view-storyboard" class="absolute inset-0 overflow-y-auto p-4 space-y-3 no-scrollbar hidden">
           <div id="scenes-container" class="space-y-3">
-            <div class="text-xs text-slate-500 text-center py-8">暂无分镜头脚本，请先在左侧输入长文案并拆分。</div>
-          </div>
+            </div>
         </div>
       </div>
     </section>
@@ -80,9 +79,9 @@
               播放预览
             </button>
           </div>
-          <span id="time-display" class="font-bold text-slate-300">0.00s / 0.00s</span>
+          <span id="time-display" class="font-bold text-slate-300">0.00s / 15.00s</span>
         </div>
-        <input id="timeline-slider" type="range" class="w-full accent-blue-500 bg-slate-800 cursor-pointer h-1 rounded-lg appearance-none" min="0" max="10" step="0.033" value="0" oninput="scrubTimeline(this.value)">
+        <input id="timeline-slider" type="range" class="w-full accent-blue-500 bg-slate-800 cursor-pointer h-1 rounded-lg appearance-none" min="0" max="15" step="0.033" value="0" oninput="scrubTimeline(this.value)">
       </div>
     </section>
 
@@ -121,7 +120,7 @@
       <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar text-xs">
         <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800/80 text-slate-400">
           你好！我是动画协作者。请在左侧列表中选定你想修改的分镜头，然后在此输入修改指令。<br><br>
-          例如：“把动画背景变成深蓝紫色 (#0d051c)，把数据圆圈放大2倍”。
+          例如：“把动画背景变成深蓝紫色 (#0d051c)，把安全数据圆圈放大2倍”。
         </div>
       </div>
 
@@ -187,12 +186,12 @@
       scenes:
     };
 
-    let activeSceneId = null;
+    let activeSceneId = "scene-1";
     let isPlaying = false;
     let playStartTime = 0;
     let requestFrameId = null;
 
-    // API Providers Default Configurations
+    // API 默认路由及预设模型映射表
     const apiPresets = {
       deepseek: { endpoint: "https://api.deepseek.com/v1", model: "deepseek-chat" },
       zhipu: { endpoint: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash" },
@@ -214,17 +213,15 @@
           break;
         }
         
-        // 抓取在 limit 字符以内的子集串
         let subStr = remainingText.substring(0, maxChars);
-        // 嗅探最近的一个换行符
         let lastNewline = subStr.lastIndexOf('\n');
         
         if (lastNewline!== -1 && lastNewline > 0) {
-          // 精准在最后一个换行处折断段落
+          // 精准在最后一个换行符处截断，不破碎自然段 [27]
           segments.push(remainingText.substring(0, lastNewline).trim());
           remainingText = remainingText.substring(lastNewline + 1).trim();
         } else {
-          // 如果在这 2000 个字符里竟然连一个换行符都没有（超长的一行段落），就寻找最近的句尾标点
+          // 兜底找句尾标点符
           let lastPunct = Math.max(
             subStr.lastIndexOf('。'),
             subStr.lastIndexOf('？'),
@@ -235,7 +232,7 @@
             segments.push(remainingText.substring(0, lastPunct + 1).trim());
             remainingText = remainingText.substring(lastPunct + 1).trim();
           } else {
-            // 最坏情况强制硬切断
+            // 最差情况，直接物理硬切
             segments.push(subStr.trim());
             remainingText = remainingText.substring(maxChars).trim();
           }
@@ -251,12 +248,10 @@
       const apiKey = document.getElementById('api-key').value;
       const model = document.getElementById('api-model').value;
 
-      if (!apiKey &&!localStorage.getItem('alerted_nokey')) {
-        alert("提示：未配置 API Key。程序现在将退回“仿真演示模式”，默认直接加载本地高质量预设动画。如需真实生成，请点击顶部的“API 配置中心”！");
-        localStorage.setItem('alerted_nokey', 'true');
+      if (!apiKey) {
+        // 无 Key 仿真运行层，确保前端界面不卡死，点击按钮立刻反馈精美假动画
         return null;
       }
-      if (!apiKey) return null;
 
       try {
         const response = await fetch(`${endpoint}/chat/completions`, {
@@ -271,20 +266,26 @@
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt }
             ],
-            temperature: 0.1,
-            response_format: { type: "json_object" } // 约束返回合法 JSON 规范
+            temperature: 0.1
           })
         });
         const data = await response.json();
-        return JSON.parse(data.choices.message.content);
+        // 兼容处理 markdown 的 JSON 标签包裹
+        let rawContent = data.choices.message.content.trim();
+        if (rawContent.startsWith("```json")) {
+          rawContent = rawContent.replace(/^```json/, "").replace(/```$/, "").trim();
+        } else if (rawContent.startsWith("```")) {
+          rawContent = rawContent.replace(/^```/, "").replace(/```$/, "").trim();
+        }
+        return JSON.parse(rawContent);
       } catch (err) {
         console.error("LLM API Call Error:", err);
-        alert("调用 API 遇到网络或鉴权错误，详情请看控制台。");
+        alert("调用 API 遇到网络或鉴权错误，详情请看控制台。现在降级为本地数据仿真预览！");
         return null;
       }
     }
 
-    // ==================== [核心管道 Pipeline: 智能分段拆分文字分镜] ====================
+    // ==================== [核心 Pipeline: 智能分段拆分文字分镜] ====================
     async function splitAndProcessPipeline() {
       const fullText = document.getElementById('script-input').value.trim();
       if (!fullText) {
@@ -292,44 +293,42 @@
         return;
       }
 
-      // 1. 调用不打碎自然段的分段算法
+      // 1. 分段段落智能拆分
       const rawTextChunks = splitTextByParagraphs(fullText, 2000);
-      alert(`文案总字数: ${fullText.length}字。系统已智能拆分为 ${rawTextChunks.length} 段，正在向 AI 发起 Pipeline 脚本拆分...`);
+      alert(`文案总字数: ${fullText.length}字。系统已智能拆分为 ${rawTextChunks.length} 段，正在顺序向 AI 发起文字分镜提取...`);
       
-      // 切换视图到 Storyboard 列表
       switchLeftTab('storyboard');
       const container = document.getElementById('scenes-container');
-      container.innerHTML = `<div class="text-xs text-blue-400 animate-pulse text-center py-12">正在向 AI 分镜大纲模型提审，请稍后...</div>`;
+      container.innerHTML = `<div class="text-xs text-blue-400 animate-pulse text-center py-12">正在依次向 AI 大模型请示分镜大纲，请稍后...</div>`;
       project.scenes =;
 
-      // 系统前导分镜拆词系统提示词
-      const systemPrompt = `你是一个顶级科普视频导演。你的核心职责是充分拆分输入文案，并提供极致通俗、可视化表达的分镜画面。
-输出格式要求：你必须返回如下格式的 JSON 数组（不要包含任何 markdown 标记包裹）：
+      const systemPrompt = `你是一个顶级科普视频导演。你的任务是充分理解输入文案，将其拆分为一系列连贯的、适合代码动画表达的分镜头脚本。
+必须返回如下格式的 JSON 数组（确保没有 markdown 标记包裹）：
 {
   "storyboards":
 }`;
 
-      // 2. 依次 Pipeline 发送每个分包 [1]
+      // 2. 顺序流水线依次发送各分段数据 [27]
       for (let i = 0; i < rawTextChunks.length; i++) {
-        container.innerHTML += `<div class="text-[10px] text-slate-500 font-mono">正在依次请求第 ${i+1}/${rawTextChunks.length} 段...</div>`;
+        container.innerHTML += `<div class="text-[10px] text-slate-500 font-mono">正在依次请求第 ${i+1}/${rawTextChunks.length} 段数据...</div>`;
         
-        const userPrompt = `这是一篇长科普文案的第 ${i+1} 部分（总共分成 ${rawTextChunks.length} 部分）。请在保持语义连贯完整性的前提下，将其拆解。
+        const userPrompt = `这是一篇科普长文案的第 ${i+1} 部分（总共分成 ${rawTextChunks.length} 段）。请你根据画面呈现原则将其拆分。
 【本段文案内容】：
 ${rawTextChunks[i]}`;
 
         let result = await makeLLMRequest(systemPrompt, userPrompt);
         
-        // 仿真器垫片 (未填写 Key 时提供极其逼真的演示数据)
+        // 仿真器垫片 (未填写 Key 时根据字数拆分成两条分镜卡片，实现 100% 演示闭环)
         if (!result) {
           result = {
             storyboards:
           };
         }
 
-        // 3. 解析大模型分镜，顺序灌入数据层
+        // 3. 顺序拼接灌入 project
         result.storyboards.forEach((sceneData) => {
           const charLen = sceneData.narrationText.length;
-          const calculatedDuration = Math.max(3.0, parseFloat((charLen * 0.3).toFixed(2))); // 基于 D = L * 0.3s
+          const calculatedDuration = Math.max(3.0, parseFloat((charLen * 0.3).toFixed(2))); // D = L * 0.3
           
           project.scenes.push({
             sceneId: `scene-${project.scenes.length + 1}`,
@@ -342,11 +341,11 @@ ${rawTextChunks[i]}`;
           });
         });
 
-        // 实时刷新 Storyboard 列表 UI
+        // 实时刷新 StoryboardUI 渲染
         renderStoryboardUI();
       }
 
-      alert("🎉 全文 Pipeline 拼装完毕！您可以在列表中点击对应卡片，进行局部微调和更新动画。");
+      alert("🎉 全文 Pipeline 分镜文字拆分完成！您可以随时点击卡片并开始编译单独的动画代码！");
       if (project.scenes.length > 0) {
         selectScene(project.scenes.sceneId);
       }
@@ -365,14 +364,14 @@ ${rawTextChunks[i]}`;
 请根据用户的分镜画面，设计 1920x1080 视口下的 SVG 元素，并编写对应的 GSAP 动作脚本。
 
 【画面视觉规范】：
-1. 你的调色盘必须是莫兰迪技术系（背景色：#090d16、暗黑科技青：#0d9488、深空灰、发光粉、高拟真荧光绿色：#10b981、莹蓝：#3b82f6）。
-2. 不允许使用普通 HTML 标签，只能生成标准的 SVG 路径（如 path, rect, circle, g 元素）。
-3. 使用简洁的渐变或网格拓扑来实现抽象的技术流程（如数据包传输、信号波扩散）。
+1. 你的调色盘必须是莫兰迪技术系（背景色：#090d16、暗黑科技青：#0d9488、深空灰、发光粉、高拟真功能荧光绿：#10b981、莹蓝：#3b82f6）。
+2. 只允许生成标准的 SVG 路径（如 path, rect, circle, g 元素），不准使用普通 HTML 标签。
+3. 使用简洁的渐变或网格拓扑来实现抽象的技术流程。
 
 【代码逻辑契约】：
 1. 必须将所有的 Tween 依次串行或并行绑定在已经内置好的全局时间轴 \`tl\` 上（例如：tl.to("#pkg", { x: 500, duration: 2 });）。
-2. 不要声明 tl 变量，直接在全局已有的 tl 变量上附加动画动作。
-3. 绝对不准使用任何带 Math.random()、Date.now() 等具有随机性质的代码，以保证 Seeking 的离散确定性 [2]。
+2. 不要重新声明 tl 变量，直接在已有全局变量 \`tl\` 上附加动作。
+3. 绝对不准使用任何带 Math.random()、Date.now() 等具有随机性质的代码，以保证 Seeking 的离散确定性 [26]。
 
 【输出格式约束】：
 你必须且只能返回标准的 JSON 格式，绝对不准附带 Markdown 包裹标识：
@@ -384,38 +383,38 @@ ${rawTextChunks[i]}`;
       const userPrompt = `【画面描述】：${promptText}
 【动画限定物理时长】：${scene.durationSeconds} 秒`;
 
-      alert("正在联系大模型编译 SVG/GSAP 动画核心中，请稍后...");
+      alert("正在联系云端大模型编译 SVG/GSAP 动画，请稍后...");
       let result = await makeLLMRequest(systemPrompt, userPrompt);
 
-      // 仿真器垫片 (未填写 Key 时根据分镜序号提供高精度预设动画代码)
+      // 仿真器垫片 (未填写 Key 时，根据分镜编号提供精美的数据流与服务器响应预设代码)
       if (!result) {
-        if (scene.order === 1) {
+        if (scene.order === 2) {
           result = {
             svg_elements: `
-              <rect id="source-node" x="200" y="490" width="100" height="100" rx="15" fill="#1e293b" stroke="#3b82f6" stroke-width="4"/>
-              <text x="250" y="550" text-anchor="middle" fill="#94a3b8" font-size="20">NODE</text>
-              <line id="net-path" x1="300" y1="540" x2="1600" y2="540" stroke="#1e293b" stroke-width="8" stroke-dasharray="10 10"/>
-              <rect id="firewall" x="1000" y="340" width="30" height="400" fill="#f43f5e" opacity="0.4" stroke="#f43f5e" stroke-width="4"/>
-              <circle id="pkg-safe" cx="300" cy="540" r="16" fill="#10b981"/>
-              <circle id="pkg-danger" cx="300" cy="540" r="16" fill="#ef4444"/>
+              <rect id="console" x="400" y="340" width="1120" height="400" rx="20" fill="#1e293b" stroke="#f43f5e" stroke-width="6"/>
+              <text x="960" y="440" text-anchor="middle" fill="#ef4444" font-size="36" font-weight="bold">⚠️ SECURITY EMERGENCY ALERT ⚠️</text>
+              <circle id="alert-glow" cx="960" cy="560" r="60" fill="#ef4444" opacity="0.3"/>
+              <circle id="alert-center" cx="960" cy="560" r="30" fill="#f43f5e"/>
             `,
             gsap_code: `
-              tl.from("#source-node", { opacity: 0, scale: 0.5, duration: 1, ease: "back.out" });
-              tl.from("#firewall", { scaleY: 0, transformOrigin: "center bottom", duration: 1 }, "+=0.2");
-              // 安全数据包跑完整路径
-              tl.fromTo("#pkg-safe", { cx: 300, opacity: 0 }, { cx: 1600, opacity: 1, duration: 3, ease: "power1.inOut" }, 1.5);
-              // 恶意数据包跑到 1000 时停下并向上消散开
-              tl.fromTo("#pkg-danger", { cx: 300, opacity: 0 }, { cx: 1000, opacity: 1, duration: 1.8, ease: "power1.inOut" }, 1.8);
-              tl.to("#pkg-danger", { cy: 300, opacity: 0, scale: 0.2, duration: 1.2 }, 3.6);
+              tl.from("#console", { scale: 0.8, opacity: 0, duration: 1.5, ease: "elastic.out(1, 0.75)" });
+              tl.from("text", { y: "-=50", opacity: 0, duration: 1.0 }, 1.0);
+              tl.fromTo("#alert-glow", { scale: 0.5, opacity: 0 }, { scale: 2.0, opacity: 0.6, repeat: 4, yoyo: true, duration: 0.8 }, 1.5);
+              tl.fromTo("#alert-center", { scale: 0.9 }, { scale: 1.2, repeat: 4, yoyo: true, duration: 0.4 }, 1.5);
             `
           };
-        } else {
+        } else if (scene.order === 3) {
           result = {
             svg_elements: `
-              <rect id="gw" x="200" y="440" width="160" height="200" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="4" />
-              <g id="dbs">
+              <g id="gw">
+                <rect x="200" y="440" width="160" height="200" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="4" />
+                <text x="280" y="545" text-anchor="middle" fill="#94a3b8" font-size="20" font-weight="bold">GATEWAY</text>
+              </g>
+              <g id="dbs" opacity="1">
                 <rect x="1400" y="340" width="220" height="120" rx="15" fill="#1e293b" stroke="#475569" stroke-width="4" />
                 <rect x="1400" y="600" width="220" height="120" rx="15" fill="#1e293b" stroke="#475569" stroke-width="4" />
+                <text x="1510" y="410" text-anchor="middle" fill="#64748b" font-size="18">DB-MASTER</text>
+                <text x="1510" y="670" text-anchor="middle" fill="#64748b" font-size="18">DB-SLAVE</text>
               </g>
               <circle id="pulse" cx="360" cy="540" r="20" fill="#10b981" opacity="0" />
             `,
@@ -427,17 +426,20 @@ ${rawTextChunks[i]}`;
               tl.to("#dbs rect", { stroke: "#10b981", duration: 0.5, stagger: 0.2, repeat: 1, yoyo: true }, 3.2);
             `
           };
+        } else {
+          result = {
+            svg_elements: `<rect id="basic-box" x="860" y="440" width="200" height="200" rx="20" fill="#10b981" />`,
+            gsap_code: `tl.from("#basic-box", { scale: 0, opacity: 0, rotation: 360, duration: 2.0, ease: "back.out" });`
+          };
         }
       }
 
-      // 将生成的代码写入编辑器与 project 数据模型
       scene.svgElements = result.svg_elements;
       scene.animationCode = result.gsap_code;
 
       document.getElementById('svg-elements-editor').value = result.svg_elements;
       document.getElementById('gsap-code-editor').value = result.gsap_code;
 
-      // 即时执行渲染重写
       updateAnimationPreview();
     }
 
@@ -487,20 +489,21 @@ ${userMessage}`;
       document.getElementById('chat-loading')?.remove();
 
       if (!result) {
-        // 仿真器局部重写演示
+        // 仿真器修改：直接替换填充色为亮紫色，演示 100% 动态改色
+        const modifiedGsap = currentGsap
+         .replace('fill: "#ef4444"', 'fill: "#c084fc"')
+         .replace('fill: "#10b981"', 'fill: "#c084fc"');
         result = {
-          svg_elements: currentSvg,
-          gsap_code: currentGsap.replace('fill: "#10b981"', 'fill: "#c084fc"') // 模拟变紫色
+          svg_elements: currentSvg.replace('fill="#10b981"', 'fill="#c084fc"').replace('fill="#ef4444"', 'fill="#c084fc"'),
+          gsap_code: modifiedGsap
         };
       }
 
-      // 将修改后的结果直接回填入编辑器
       scene.svgElements = result.svg_elements;
       scene.animationCode = result.gsap_code;
       document.getElementById('svg-elements-editor').value = result.svg_elements;
       document.getElementById('gsap-code-editor').value = result.gsap_code;
 
-      // 刷新动画渲染
       updateAnimationPreview();
 
       chatContainer.innerHTML += `
@@ -514,10 +517,10 @@ ${userMessage}`;
     function switchLeftTab(tab) {
       const isScript = tab === 'script';
       document.getElementById('tab-script-btn').className = isScript 
-       ? 'flex-1 text-xs font-bold text-blue-400 border-b-2 border-blue-500' 
+      ? 'flex-1 text-xs font-bold text-blue-400 border-b-2 border-blue-500' 
         : 'flex-1 text-xs font-bold text-slate-500';
       document.getElementById('tab-storyboard-btn').className =!isScript 
-       ? 'flex-1 text-xs font-bold text-blue-400 border-b-2 border-blue-500' 
+      ? 'flex-1 text-xs font-bold text-blue-400 border-b-2 border-blue-500' 
         : 'flex-1 text-xs font-bold text-slate-500';
 
       document.getElementById('view-script').style.display = isScript? 'flex' : 'none';
@@ -534,7 +537,7 @@ ${userMessage}`;
         const card = document.createElement('div');
         card.className = `p-4 border rounded-xl transition cursor-pointer flex flex-col gap-2 ${
           isActive 
-           ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-950/20' 
+          ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-950/20' 
             : 'border-slate-800 bg-slate-900/40 hover:bg-slate-900/85 hover:border-slate-700'
         }`;
         
@@ -551,7 +554,6 @@ ${userMessage}`;
           <textarea class="w-full bg-transparent text-xs text-slate-200 resize-none focus:outline-none leading-relaxed" rows="3">${scene.narrationText}</textarea>
         `;
 
-        // 支持文案实时编辑与重算时长
         const textarea = card.querySelector('textarea');
         textarea.addEventListener('input', (e) => {
           scene.narrationText = e.target.value;
@@ -605,7 +607,7 @@ ${userMessage}`;
             const tl = gsap.timeline({ paused: true });
             window.__currentTimeline = tl;
             
-            // 物理运动
+            // 物理运动轨迹
             ${scene.animationCode}
 
             window.addEventListener('message', (e) => {
@@ -620,7 +622,6 @@ ${userMessage}`;
       const iframe = document.getElementById('preview-sandbox');
       iframe.srcdoc = sandboxTemplate;
 
-      // 更新时间滑块刻度上限
       const slider = document.getElementById('timeline-slider');
       slider.max = scene.durationSeconds;
       document.getElementById('time-display').innerText = `0.00s / ${scene.durationSeconds.toFixed(2)}s`;
@@ -632,7 +633,6 @@ ${userMessage}`;
       if (!activeSceneId) return;
       const scene = project.scenes.find(s => s.sceneId === activeSceneId);
       
-      // 读取编辑器代码并回写进缓存
       scene.svgElements = document.getElementById('svg-elements-editor').value;
       scene.animationCode = document.getElementById('gsap-code-editor').value;
       scene.visualPrompt = document.getElementById('active-visual-prompt').value;
@@ -666,7 +666,6 @@ ${userMessage}`;
         const currentProgress = parseFloat(slider.value);
         const maxTime = parseFloat(slider.max);
         
-        // 循环重播安全垫片
         const startOffset = currentProgress >= maxTime? 0 : currentProgress;
         playStartTime = performance.now() - startOffset * 1000;
         
@@ -691,7 +690,7 @@ ${userMessage}`;
       requestFrameId = requestAnimationFrame(tick);
     }
 
-    // ==================== [API配置与模态框] ====================
+    // API 配置与模态控制
     function toggleSettingsModal(show) {
       document.getElementById('settings-modal').style.display = show? 'flex' : 'none';
     }
@@ -703,7 +702,6 @@ ${userMessage}`;
     }
 
     function saveApiSettings() {
-      // 保存至 Session 或 localState 运行态
       toggleSettingsModal(false);
       alert("API 配置保存成功！");
     }
@@ -711,6 +709,11 @@ ${userMessage}`;
     function triggerFfmpegExport() {
       alert("视频捕获管道触发成功！在 Electron 本地宿主应用下运行时，此动作将调用无头浏览器以确定性 seek 时间轴（${project.fps} FPS），进行快照截图并直接推入 FFmpeg，生成高清 MP4！");
     }
+
+    // 初始化加载
+    window.onload = () => {
+      selectScene("scene-1");
+    };
   </script>
 </body>
 </html>

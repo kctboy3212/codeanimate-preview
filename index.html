@@ -1,719 +1,540 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CodeAnimate AI - 互动科普视频工作台</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
- .no-scrollbar::-webkit-scrollbar { display: none; }
- .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    iframe { background-color: #090d16; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG Animate Editor - 科普动画一站式制作平台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#090d16',
+                        panelBg: '#111827',
+                        borderCool: '#1f2937',
+                        accentBlue: '#3b82f6',
+                        accentGreen: '#10b981',
+                        accentPurple: '#8b5cf6',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #090d16; }
+        ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #374151; }
+        .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
 </head>
-<body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden font-sans select-none">
+<body class="bg-darkBg text-gray-100 font-sans min-h-screen flex flex-col overflow-hidden">
 
-  <header class="h-14 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/40 backdrop-blur z-10">
-    <div class="flex items-center gap-3">
-      <span class="text-xl">⚡</span>
-      <h1 class="font-bold text-sm tracking-wide bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-        CodeAnimate AI - 科普代码视频系统
-      </h1>
-      <span class="px-2 py-0.5 text-[9px] font-mono bg-blue-500/10 text-blue-400 rounded-full border border-blue-500/20">
-        Standalone Pipeline Editor
-      </span>
-    </div>
-    
-    <div class="flex items-center gap-3">
-      <button onclick="toggleSettingsModal(true)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded border border-slate-700 transition">
-        ⚙️ API 配置中心
-      </button>
-      <button onclick="triggerFfmpegExport()" class="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded text-xs font-semibold transition shadow-lg shadow-indigo-950/40">
-        导出 MP4 (FFmpeg)
-      </button>
-    </div>
-  </header>
-
-  <main class="flex flex-1 overflow-hidden">
-    
-    <section class="w-80 border-r border-slate-800 bg-slate-950/70 flex flex-col">
-      <div class="h-10 border-b border-slate-800 flex bg-slate-950">
-        <button id="tab-script-btn" onclick="switchLeftTab('script')" class="flex-1 text-xs font-bold text-blue-400 border-b-2 border-blue-500">
-          长文案导入
-        </button>
-        <button id="tab-storyboard-btn" onclick="switchLeftTab('storyboard')" class="flex-1 text-xs font-bold text-slate-500">
-          分镜脚本 (<span id="scene-counter">1</span>)
-        </button>
-      </div>
-
-      <div class="flex-1 overflow-hidden relative">
-        <div id="view-script" class="absolute inset-0 p-4 flex flex-col gap-3">
-          <label class="text-[10px] text-slate-400 font-mono uppercase tracking-wider block">科普长文案输入区域 (支持万字)</label>
-          <textarea id="script-input" class="flex-1 w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-xs text-slate-300 focus:outline-none focus:border-blue-500/80 leading-relaxed resize-none no-scrollbar" placeholder="在此输入或粘贴你准备好的万字科普文章..."></textarea>
-          <button id="btn-split-and-generate" onclick="splitAndProcessPipeline()" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-bold transition">
-            🪄 智能拆分并生成文字分镜
-          </button>
-        </div>
-
-        <div id="view-storyboard" class="absolute inset-0 overflow-y-auto p-4 space-y-3 no-scrollbar hidden">
-          <div id="scenes-container" class="space-y-3">
+    <header class="bg-panelBg border-b border-borderCool px-6 py-3 flex items-center justify-between z-10">
+        <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-accentBlue to-accentPurple flex items-center justify-center font-bold text-white shadow-lg">S</div>
+            <div>
+                <h1 class="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">SVG Animate Studio</h1>
+                <p class="text-xs text-gray-400">科普视频代码动画一站式生成器</p>
             </div>
         </div>
-      </div>
-    </section>
-
-    <section class="flex-1 bg-slate-950 flex flex-col items-center justify-center p-6 relative">
-      <div class="w-full max-w-2xl aspect-video bg-slate-900 rounded-xl border border-slate-800/80 shadow-2xl relative overflow-hidden">
-        <iframe id="preview-sandbox" class="w-full h-full border-none" sandbox="allow-scripts allow-same-origin"></iframe>
         
-        <div class="absolute top-3 left-3 px-2 py-1 bg-slate-950/80 backdrop-blur text-[10px] font-mono text-emerald-400 rounded border border-emerald-500/20 flex items-center gap-1.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          deterministic canvas online
-        </div>
-      </div>
-      
-      <div class="w-full max-w-2xl mt-6 bg-slate-900/50 p-4 border border-slate-800/80 rounded-xl backdrop-blur">
-        <div class="flex items-center justify-between text-xs text-slate-400 font-mono mb-2">
-          <div class="flex items-center gap-2">
-            <button id="btn-play" onclick="togglePlayback()" class="bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 py-1 rounded transition active:scale-95">
-              播放预览
+        <div class="flex items-center space-x-4">
+            <span class="flex items-center space-x-2 text-xs bg-gray-800 px-3 py-1.5 rounded-full text-gray-300 border border-borderCool">
+                <span class="w-2 h-2 rounded-full bg-accentGreen animate-ping"></span>
+                <span>GitHub Pages 正常运行</span>
+            </span>
+            <button id="toggleConfigBtn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded transition font-medium flex items-center space-x-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                <span>API 接口设置</span>
             </button>
-          </div>
-          <span id="time-display" class="font-bold text-slate-300">0.00s / 15.00s</span>
         </div>
-        <input id="timeline-slider" type="range" class="w-full accent-blue-500 bg-slate-800 cursor-pointer h-1 rounded-lg appearance-none" min="0" max="15" step="0.033" value="0" oninput="scrubTimeline(this.value)">
-      </div>
-    </section>
+    </header>
 
-    <section class="w-80 border-l border-slate-800 bg-slate-950/70 flex flex-col">
-      <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
-        <h2 class="font-bold text-xs text-slate-400 uppercase tracking-wider">分镜代码控制台</h2>
-        <button onclick="updateAnimationPreview()" class="text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded transition font-bold">
-          更新动画 🔄
-        </button>
-      </div>
-
-      <div class="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
-        <div class="space-y-1">
-          <label class="text-[10px] text-slate-400 font-mono block">SVG 矢量元素标记 (DOM Elements)</label>
-          <textarea id="svg-elements-editor" class="w-full h-36 bg-slate-900 border border-slate-800 rounded p-2 text-[10px] text-slate-300 font-mono focus:outline-none focus:border-blue-500/50 leading-relaxed resize-none" placeholder="SVG Elements Markup..."></textarea>
-        </div>
-
-        <div class="space-y-1">
-          <label class="text-[10px] text-slate-400 font-mono block">GSAP 轨迹控制逻辑 (Timeline `tl` 驱动)</label>
-          <textarea id="gsap-code-editor" class="w-full h-52 bg-slate-900 border border-slate-800 rounded p-2 text-[10px] text-emerald-400 font-mono focus:outline-none focus:border-blue-500/50 leading-relaxed resize-none" placeholder="GSAP Timelines Code..."></textarea>
-        </div>
-
-        <div class="space-y-1">
-          <label class="text-[10px] text-slate-400 font-mono block">当前分镜设计画面描述词 (Prompt)</label>
-          <textarea id="active-visual-prompt" class="w-full h-24 bg-slate-900 border border-slate-800 rounded p-2 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50 leading-relaxed resize-none" placeholder="分镜画面描述词..."></textarea>
-        </div>
-      </div>
-    </section>
-
-    <section class="w-72 border-l border-slate-800 bg-slate-950 flex flex-col">
-      <div class="p-4 border-b border-slate-800 bg-slate-950">
-        <h2 class="font-bold text-xs text-slate-400 uppercase tracking-wider">AI 动画协作者 (Chat UI)</h2>
-        <span class="text-[9px] text-slate-500 block mt-0.5">选择左侧任意分镜，即可输入指令修改对应代码</span>
-      </div>
-
-      <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar text-xs">
-        <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800/80 text-slate-400">
-          你好！我是动画协作者。请在左侧列表中选定你想修改的分镜头，然后在此输入修改指令。<br><br>
-          例如：“把动画背景变成深蓝紫色 (#0d051c)，把安全数据圆圈放大2倍”。
-        </div>
-      </div>
-
-      <div class="p-3 border-t border-slate-800 bg-slate-950 flex gap-2">
-        <input id="chat-input" type="text" class="flex-1 bg-slate-900 border border-slate-800 rounded px-2.5 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500" placeholder="在此输入修改建议..." onkeydown="if(event.key === 'Enter') sendModificationChat()">
-        <button onclick="sendModificationChat()" class="px-3 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs transition font-semibold">
-          发送
-        </button>
-      </div>
-    </section>
-
-  </main>
-
-  <div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
-    <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl w-full max-w-md shadow-2xl relative">
-      <button onclick="toggleSettingsModal(false)" class="absolute top-4 right-4 text-slate-500 hover:text-slate-300 font-bold">✕</button>
-      
-      <h2 class="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider border-b border-slate-800 pb-2">🔑 API 路由配置中心</h2>
-      
-      <div class="space-y-4 text-xs">
-        <div>
-          <label class="block text-slate-400 font-medium mb-1">选择 API 提供商</label>
-          <select id="api-provider" onchange="onApiProviderChange(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200 focus:outline-none focus:border-blue-500">
-            <option value="deepseek">DeepSeek</option>
-            <option value="zhipu">智谱 AI (GLM)</option>
-            <option value="minimax">Minimax (海螺)</option>
-            <option value="openai">OpenAI (ChatGPT)</option>
-            <option value="nvidia">NVIDIA NIM 模型路由</option>
-            <option value="openrouter">OpenRouter Market</option>
-            <option value="gemini">Google Gemini</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-slate-400 font-medium mb-1">模型代理请求端点 (Base URL)</label>
-          <input id="api-endpoint" type="text" class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-blue-500" value="https://api.deepseek.com/v1">
-        </div>
-
-        <div>
-          <label class="block text-slate-400 font-medium mb-1">接口密钥 (API KEY)</label>
-          <input id="api-key" type="password" class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-blue-500" placeholder="输入对应平台 API Key...">
-        </div>
-
-        <div>
-          <label class="block text-slate-400 font-medium mb-1">指定调联模型名 (Model Name)</label>
-          <input id="api-model" type="text" class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-blue-500" value="deepseek-chat">
-        </div>
-        
-        <div class="pt-2">
-          <button onclick="saveApiSettings()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 rounded text-white font-bold transition">
-            保存配置
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    // ==================== [数据结构定义] ====================
-    let project = {
-      projectId: "proj_cloud_interactive",
-      fps: 30,
-      scenes:
-    };
-
-    let activeSceneId = "scene-1";
-    let isPlaying = false;
-    let playStartTime = 0;
-    let requestFrameId = null;
-
-    // API 默认路由及预设模型映射表
-    const apiPresets = {
-      deepseek: { endpoint: "https://api.deepseek.com/v1", model: "deepseek-chat" },
-      zhipu: { endpoint: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash" },
-      minimax: { endpoint: "https://api.minimax.chat/v1", model: "abab6.5s-chat" },
-      openai: { endpoint: "https://api.openai.com/v1", model: "gpt-4o-mini" },
-      nvidia: { endpoint: "https://integrate.api.nvidia.com/v1", model: "meta/llama-3.1-405b-instruct" },
-      openrouter: { endpoint: "https://openrouter.ai/api/v1", model: "meta-llama/llama-3.1-8b-instruct:free" },
-      gemini: { endpoint: "https://generativetoolkit.googleapis.com", model: "gemini-1.5-flash" }
-    };
-
-    // ==================== [算法 1: 2000字内不打碎自然段分段算法] ====================
-    function splitTextByParagraphs(text, maxChars = 2000) {
-      const segments =;
-      let remainingText = text.replace(/\r\n/g, '\n').trim();
-      
-      while (remainingText.length > 0) {
-        if (remainingText.length <= maxChars) {
-          segments.push(remainingText);
-          break;
-        }
-        
-        let subStr = remainingText.substring(0, maxChars);
-        let lastNewline = subStr.lastIndexOf('\n');
-        
-        if (lastNewline!== -1 && lastNewline > 0) {
-          // 精准在最后一个换行符处截断，不破碎自然段 [27]
-          segments.push(remainingText.substring(0, lastNewline).trim());
-          remainingText = remainingText.substring(lastNewline + 1).trim();
-        } else {
-          // 兜底找句尾标点符
-          let lastPunct = Math.max(
-            subStr.lastIndexOf('。'),
-            subStr.lastIndexOf('？'),
-            subStr.lastIndexOf('！'),
-            subStr.lastIndexOf('.')
-          );
-          if (lastPunct!== -1 && lastPunct > 0) {
-            segments.push(remainingText.substring(0, lastPunct + 1).trim());
-            remainingText = remainingText.substring(lastPunct + 1).trim();
-          } else {
-            // 最差情况，直接物理硬切
-            segments.push(subStr.trim());
-            remainingText = remainingText.substring(maxChars).trim();
-          }
-        }
-      }
-      return segments;
-    }
-
-    // ==================== [系统 API 联调底层 Fetch 块] ====================
-    async function makeLLMRequest(systemPrompt, userPrompt) {
-      const provider = document.getElementById('api-provider').value;
-      const endpoint = document.getElementById('api-endpoint').value;
-      const apiKey = document.getElementById('api-key').value;
-      const model = document.getElementById('api-model').value;
-
-      if (!apiKey) {
-        // 无 Key 仿真运行层，确保前端界面不卡死，点击按钮立刻反馈精美假动画
-        return null;
-      }
-
-      try {
-        const response = await fetch(`${endpoint}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
-            ],
-            temperature: 0.1
-          })
-        });
-        const data = await response.json();
-        // 兼容处理 markdown 的 JSON 标签包裹
-        let rawContent = data.choices.message.content.trim();
-        if (rawContent.startsWith("```json")) {
-          rawContent = rawContent.replace(/^```json/, "").replace(/```$/, "").trim();
-        } else if (rawContent.startsWith("```")) {
-          rawContent = rawContent.replace(/^```/, "").replace(/```$/, "").trim();
-        }
-        return JSON.parse(rawContent);
-      } catch (err) {
-        console.error("LLM API Call Error:", err);
-        alert("调用 API 遇到网络或鉴权错误，详情请看控制台。现在降级为本地数据仿真预览！");
-        return null;
-      }
-    }
-
-    // ==================== [核心 Pipeline: 智能分段拆分文字分镜] ====================
-    async function splitAndProcessPipeline() {
-      const fullText = document.getElementById('script-input').value.trim();
-      if (!fullText) {
-        alert("请先输入文案内容！");
-        return;
-      }
-
-      // 1. 分段段落智能拆分
-      const rawTextChunks = splitTextByParagraphs(fullText, 2000);
-      alert(`文案总字数: ${fullText.length}字。系统已智能拆分为 ${rawTextChunks.length} 段，正在顺序向 AI 发起文字分镜提取...`);
-      
-      switchLeftTab('storyboard');
-      const container = document.getElementById('scenes-container');
-      container.innerHTML = `<div class="text-xs text-blue-400 animate-pulse text-center py-12">正在依次向 AI 大模型请示分镜大纲，请稍后...</div>`;
-      project.scenes =;
-
-      const systemPrompt = `你是一个顶级科普视频导演。你的任务是充分理解输入文案，将其拆分为一系列连贯的、适合代码动画表达的分镜头脚本。
-必须返回如下格式的 JSON 数组（确保没有 markdown 标记包裹）：
-{
-  "storyboards":
-}`;
-
-      // 2. 顺序流水线依次发送各分段数据 [27]
-      for (let i = 0; i < rawTextChunks.length; i++) {
-        container.innerHTML += `<div class="text-[10px] text-slate-500 font-mono">正在依次请求第 ${i+1}/${rawTextChunks.length} 段数据...</div>`;
-        
-        const userPrompt = `这是一篇科普长文案的第 ${i+1} 部分（总共分成 ${rawTextChunks.length} 段）。请你根据画面呈现原则将其拆分。
-【本段文案内容】：
-${rawTextChunks[i]}`;
-
-        let result = await makeLLMRequest(systemPrompt, userPrompt);
-        
-        // 仿真器垫片 (未填写 Key 时根据字数拆分成两条分镜卡片，实现 100% 演示闭环)
-        if (!result) {
-          result = {
-            storyboards:
-          };
-        }
-
-        // 3. 顺序拼接灌入 project
-        result.storyboards.forEach((sceneData) => {
-          const charLen = sceneData.narrationText.length;
-          const calculatedDuration = Math.max(3.0, parseFloat((charLen * 0.3).toFixed(2))); // D = L * 0.3
-          
-          project.scenes.push({
-            sceneId: `scene-${project.scenes.length + 1}`,
-            order: project.scenes.length + 1,
-            narrationText: sceneData.narrationText,
-            durationSeconds: calculatedDuration,
-            visualPrompt: sceneData.visualPrompt,
-            svgElements: `<rect x="500" y="440" width="100" height="100" fill="#3b82f6" />`, // 默认占位
-            animationCode: `tl.from("rect", { opacity: 0, duration: 2 });` // 默认占位
-          });
-        });
-
-        // 实时刷新 StoryboardUI 渲染
-        renderStoryboardUI();
-      }
-
-      alert("🎉 全文 Pipeline 分镜文字拆分完成！您可以随时点击卡片并开始编译单独的动画代码！");
-      if (project.scenes.length > 0) {
-        selectScene(project.scenes.sceneId);
-      }
-    }
-
-    // ==================== [动画生成 Vibe-Coding 提示词系统] ====================
-    async function compileAnimationForActiveScene() {
-      if (!activeSceneId) {
-        alert("请先选定一个分镜头！");
-        return;
-      }
-      const scene = project.scenes.find(s => s.sceneId === activeSceneId);
-      const promptText = document.getElementById('active-visual-prompt').value;
-      
-      const systemPrompt = `你是一个精通科普动画视觉设计（SVG）与 GSAP 补间时间轴的专家。
-请根据用户的分镜画面，设计 1920x1080 视口下的 SVG 元素，并编写对应的 GSAP 动作脚本。
-
-【画面视觉规范】：
-1. 你的调色盘必须是莫兰迪技术系（背景色：#090d16、暗黑科技青：#0d9488、深空灰、发光粉、高拟真功能荧光绿：#10b981、莹蓝：#3b82f6）。
-2. 只允许生成标准的 SVG 路径（如 path, rect, circle, g 元素），不准使用普通 HTML 标签。
-3. 使用简洁的渐变或网格拓扑来实现抽象的技术流程。
-
-【代码逻辑契约】：
-1. 必须将所有的 Tween 依次串行或并行绑定在已经内置好的全局时间轴 \`tl\` 上（例如：tl.to("#pkg", { x: 500, duration: 2 });）。
-2. 不要重新声明 tl 变量，直接在已有全局变量 \`tl\` 上附加动作。
-3. 绝对不准使用任何带 Math.random()、Date.now() 等具有随机性质的代码，以保证 Seeking 的离散确定性 [26]。
-
-【输出格式约束】：
-你必须且只能返回标准的 JSON 格式，绝对不带 Markdown 包裹标识：
-{
-  "svg_elements": "对应的 SVG 节点标签 markup 代码",
-  "gsap_code": "驱动以上 SVG 的 GSAP 动作序列，注意只能使用 tl 句柄，如 tl.from('#abc', { opacity:0, duration: 1 })"
-}`;
-
-      const userPrompt = `【画面描述】：${promptText}
-【动画限定物理时长】：${scene.durationSeconds} 秒`;
-
-      alert("正在联系云端大模型编译 SVG/GSAP 动画，请稍后...");
-      let result = await makeLLMRequest(systemPrompt, userPrompt);
-
-      // 仿真器垫片 (未填写 Key 时，根据分镜编号提供精美的数据流与服务器响应预设代码)
-      if (!result) {
-        if (scene.order === 2) {
-          result = {
-            svg_elements: `
-              <rect id="console" x="400" y="340" width="1120" height="400" rx="20" fill="#1e293b" stroke="#f43f5e" stroke-width="6"/>
-              <text x="960" y="440" text-anchor="middle" fill="#ef4444" font-size="36" font-weight="bold">⚠️ SECURITY EMERGENCY ALERT ⚠️</text>
-              <circle id="alert-glow" cx="960" cy="560" r="60" fill="#ef4444" opacity="0.3"/>
-              <circle id="alert-center" cx="960" cy="560" r="30" fill="#f43f5e"/>
-            `,
-            gsap_code: `
-              tl.from("#console", { scale: 0.8, opacity: 0, duration: 1.5, ease: "elastic.out(1, 0.75)" });
-              tl.from("text", { y: "-=50", opacity: 0, duration: 1.0 }, 1.0);
-              tl.fromTo("#alert-glow", { scale: 0.5, opacity: 0 }, { scale: 2.0, opacity: 0.6, repeat: 4, yoyo: true, duration: 0.8 }, 1.5);
-              tl.fromTo("#alert-center", { scale: 0.9 }, { scale: 1.2, repeat: 4, yoyo: true, duration: 0.4 }, 1.5);
-            `
-          };
-        } else if (scene.order === 3) {
-          result = {
-            svg_elements: `
-              <g id="gw">
-                <rect x="200" y="440" width="160" height="200" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="4" />
-                <text x="280" y="545" text-anchor="middle" fill="#94a3b8" font-size="20" font-weight="bold">GATEWAY</text>
-              </g>
-              <g id="dbs" opacity="1">
-                <rect x="1400" y="340" width="220" height="120" rx="15" fill="#1e293b" stroke="#475569" stroke-width="4" />
-                <rect x="1400" y="600" width="220" height="120" rx="15" fill="#1e293b" stroke="#475569" stroke-width="4" />
-                <text x="1510" y="410" text-anchor="middle" fill="#64748b" font-size="18">DB-MASTER</text>
-                <text x="1510" y="670" text-anchor="middle" fill="#64748b" font-size="18">DB-SLAVE</text>
-              </g>
-              <circle id="pulse" cx="360" cy="540" r="20" fill="#10b981" opacity="0" />
-            `,
-            gsap_code: `
-              tl.from("#gw", { x: -100, opacity: 0, duration: 1 });
-              tl.from("#dbs", { x: 100, opacity: 0, duration: 1 }, 0.5);
-              tl.to("#pulse", { opacity: 1, duration: 0.3 }, 1.2);
-              tl.to("#pulse", { cx: 1400, duration: 2.2, ease: "sine.inOut" }, 1.5);
-              tl.to("#dbs rect", { stroke: "#10b981", duration: 0.5, stagger: 0.2, repeat: 1, yoyo: true }, 3.2);
-            `
-          };
-        } else {
-          result = {
-            svg_elements: `<rect id="basic-box" x="860" y="440" width="200" height="200" rx="20" fill="#10b981" />`,
-            gsap_code: `tl.from("#basic-box", { scale: 0, opacity: 0, rotation: 360, duration: 2.0, ease: "back.out" });`
-          };
-        }
-      }
-
-      scene.svgElements = result.svg_elements;
-      scene.animationCode = result.gsap_code;
-
-      document.getElementById('svg-elements-editor').value = result.svg_elements;
-      document.getElementById('gsap-code-editor').value = result.gsap_code;
-
-      updateAnimationPreview();
-    }
-
-    // ==================== [对话改码：AI Chat 协同优化系统] ====================
-    async function sendModificationChat() {
-      const inputEl = document.getElementById('chat-input');
-      const userMessage = inputEl.value.trim();
-      if (!userMessage) return;
-
-      if (!activeSceneId) {
-        alert("请先选定一个分镜头作为对话上下文！");
-        return;
-      }
-
-      const chatContainer = document.getElementById('chat-messages');
-      chatContainer.innerHTML += `
-        <div class="bg-blue-600/10 p-2.5 rounded border border-blue-500/20 text-slate-200">
-          <strong class="text-blue-400">你：</strong> ${userMessage}
-        </div>
-      `;
-      inputEl.value = '';
-
-      const scene = project.scenes.find(s => s.sceneId === activeSceneId);
-      const currentSvg = document.getElementById('svg-elements-editor').value;
-      const currentGsap = document.getElementById('gsap-code-editor').value;
-
-      const systemPrompt = `你是一个精准的代码动画修改协作者。你的任务是根据用户的对话指令，精细调整已有的 SVG 节点和 GSAP 补间轨迹，不允许修改不相干的内容。
-你必须返回合法的 JSON 对象：
-{
-  "svg_elements": "更新修改后的完整 SVG 节点代码",
-  "gsap_code": "更新修改后的完整 GSAP 逻辑代码"
-}
-注意：返回的 json 属性中，确保使用 tl 驱动动画。`;
-
-      const userPrompt = `【当前 SVG 元素】：
-${currentSvg}
-
-【当前 GSAP 时间轴逻辑】：
-${currentGsap}
-
-【用户的修改指令】：
-${userMessage}`;
-
-      chatContainer.innerHTML += `<div id="chat-loading" class="text-xs text-blue-400 animate-pulse">AI 正在精准修改代码中...</div>`;
-      let result = await makeLLMRequest(systemPrompt, userPrompt);
-
-      document.getElementById('chat-loading')?.remove();
-
-      if (!result) {
-        // 仿真器修改：直接替换填充色为亮紫色，演示 100% 动态改色
-        const modifiedGsap = currentGsap
-        .replace('fill: "#ef4444"', 'fill: "#c084fc"')
-        .replace('fill: "#10b981"', 'fill: "#c084fc"');
-        result = {
-          svg_elements: currentSvg.replace('fill="#10b981"', 'fill="#c084fc"').replace('fill="#ef4444"', 'fill="#c084fc"'),
-          gsap_code: modifiedGsap
-        };
-      }
-
-      scene.svgElements = result.svg_elements;
-      scene.animationCode = result.gsap_code;
-      document.getElementById('svg-elements-editor').value = result.svg_elements;
-      document.getElementById('gsap-code-editor').value = result.gsap_code;
-
-      updateAnimationPreview();
-
-      chatContainer.innerHTML += `
-        <div class="bg-emerald-600/10 p-2.5 rounded border border-emerald-500/20 text-emerald-400">
-          <strong>AI 协作者：</strong> 更改已就绪！我已将对应的轨迹与节点颜色进行了更新并重新重载了预览。
-        </div>
-      `;
-    }
-
-    // ==================== [UI 状态流维护与 IFrame 驱动] ====================
-    function switchLeftTab(tab) {
-      const isScript = tab === 'script';
-      document.getElementById('tab-script-btn').className = isScript 
-     ? 'flex-1 text-xs font-bold text-blue-400 border-b-2 border-blue-500' 
-        : 'flex-1 text-xs font-bold text-slate-500';
-      document.getElementById('tab-storyboard-btn').className =!isScript 
-     ? 'flex-1 text-xs font-bold text-blue-400 border-b-2 border-blue-500' 
-        : 'flex-1 text-xs font-bold text-slate-500';
-
-      document.getElementById('view-script').style.display = isScript? 'flex' : 'none';
-      document.getElementById('view-storyboard').style.display =!isScript? 'block' : 'none';
-    }
-
-    function renderStoryboardUI() {
-      const container = document.getElementById('scenes-container');
-      document.getElementById('scene-counter').innerText = project.scenes.length;
-      container.innerHTML = '';
-
-      project.scenes.forEach((scene) => {
-        const isActive = scene.sceneId === activeSceneId;
-        const card = document.createElement('div');
-        card.className = `p-4 border rounded-xl transition cursor-pointer flex flex-col gap-2 ${
-          isActive 
-         ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-950/20' 
-            : 'border-slate-800 bg-slate-900/40 hover:bg-slate-900/85 hover:border-slate-700'
-        }`;
-        
-        card.onclick = () => selectScene(scene.sceneId);
-
-        card.innerHTML = `
-          <div class="flex justify-between items-center text-[10px] font-mono">
-            <span class="${isActive? 'text-blue-400 font-bold' : 'text-slate-500'}">SCENE #${scene.order}</span>
-            <div class="flex items-center gap-2">
-              <span class="px-1.5 py-0.5 rounded bg-slate-950 text-slate-400 font-bold">${scene.durationSeconds}s</span>
-              <button onclick="event.stopPropagation(); compileAnimationForActiveScene()" class="text-[9px] bg-indigo-600/80 hover:bg-indigo-500 px-1.5 py-0.5 rounded text-white font-bold">🪄 编译动画</button>
+    <main class="flex-1 flex overflow-hidden">
+        <section id="sidebarLeft" class="w-80 bg-panelBg border-r border-borderCool flex flex-col flex-shrink-0">
+            <div id="apiConfigPanel" class="hidden p-4 border-b border-borderCool bg-gray-900/50">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-blue-400">API 接口端点配置</h3>
+                </div>
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <label class="block text-gray-400 mb-1">选择服务商</label>
+                        <select id="apiProvider" class="w-full bg-darkBg border border-borderCool p-1.5 rounded text-gray-200">
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="github-models">GitHub Models (免费测试)</option>
+                            <option value="zhipu">智谱清言 (GLM)</option>
+                            <option value="minimax">MiniMax</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="openrouter">OpenRouter</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 mb-1">API Endpoint URL</label>
+                        <input id="apiEndpoint" type="text" placeholder="https://api.deepseek.com/v1" class="w-full bg-darkBg border border-borderCool p-1.5 rounded text-gray-200">
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 mb-1">API Key / Token</label>
+                        <input id="apiKey" type="password" placeholder="sk-******" class="w-full bg-darkBg border border-borderCool p-1.5 rounded text-gray-200">
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 mb-1">模型名称 (Model)</label>
+                        <input id="apiModel" type="text" placeholder="deepseek-chat" class="w-full bg-darkBg border border-borderCool p-1.5 rounded text-gray-200">
+                    </div>
+                    <button id="saveConfigBtn" class="w-full bg-accentGreen hover:bg-emerald-600 text-white font-semibold py-1 rounded text-xs transition">保存配置</button>
+                </div>
             </div>
-          </div>
-          <textarea class="w-full bg-transparent text-xs text-slate-200 resize-none focus:outline-none leading-relaxed" rows="3">${scene.narrationText}</textarea>
-        `;
 
-        const textarea = card.querySelector('textarea');
-        textarea.addEventListener('input', (e) => {
-          scene.narrationText = e.target.value;
-          scene.durationSeconds = calculateDuration(e.target.value);
-          renderStoryboardUI();
+            <div class="flex-1 flex flex-col p-4 overflow-y-auto space-y-4">
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-200 mb-1">1. 粘贴视频配音文案</h3>
+                    <textarea id="rawScriptText" placeholder="在此粘贴你的整篇科普视频文案。支持万字长文..." class="w-full h-80 bg-darkBg border border-borderCool p-2.5 rounded text-xs leading-relaxed resize-none"></textarea>
+                </div>
+                <button id="chunkScriptBtn" class="w-full bg-accentBlue hover:bg-blue-500 text-white font-semibold py-2 rounded text-xs transition flex items-center justify-center space-x-2">
+                    <span>第一步：开始拆分分镜头</span>
+                </button>
+                
+                <div id="processingStatus" class="hidden border border-borderCool bg-gray-900/80 p-3 rounded text-xs space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-400">分镜脚本解析进度</span>
+                        <span id="progressPercent" class="text-accentBlue font-bold">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
+                        <div id="progressBar" class="bg-accentBlue h-full w-0 transition-all duration-300"></div>
+                    </div>
+                    <div id="statusLog" class="text-[10px] text-gray-500 italic max-h-16 overflow-y-auto">准备解析文案段落...</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="flex-1 flex flex-col border-r border-borderCool overflow-hidden">
+            <div class="h-1/2 border-b border-borderCool flex flex-col overflow-hidden">
+                <div class="bg-gray-900 px-4 py-2 border-b border-borderCool flex items-center justify-between">
+                    <h3 class="text-xs font-bold text-gray-400">分镜脚本工作台（双击文本可快速微调修改）</h3>
+                    <span id="sceneCountText" class="text-[10px] text-gray-500">共 0 个分镜</span>
+                </div>
+                <div id="sceneCardContainer" class="flex-1 overflow-x-auto flex p-4 space-x-4 items-start bg-darkBg">
+                    <div class="text-xs text-gray-500 text-center w-full py-12">暂无分镜脚本，请在左侧粘贴视频文案并点击“开始拆分分镜头”</div>
+                </div>
+            </div>
+
+            <div class="h-1/2 flex flex-col overflow-hidden bg-panelBg">
+                <div class="bg-gray-900 px-4 py-2 border-b border-borderCool flex items-center justify-between">
+                    <h3 class="text-xs font-bold text-gray-400">当前场景代码编辑器 (<span id="editingSceneTitle" class="text-accentBlue">未选中任何场景</span>)</h3>
+                    <button id="updatePreviewBtn" class="bg-accentGreen hover:bg-emerald-600 text-white text-[11px] px-3 py-1 rounded transition font-semibold">更新动画预览</button>
+                </div>
+                <div class="flex-1 flex overflow-hidden text-xs">
+                    <div class="w-1/2 border-r border-borderCool flex flex-col">
+                        <div class="bg-gray-900/80 px-3 py-1 text-[10px] text-gray-500 border-b border-borderCool">SVG 结构布局</div>
+                        <textarea id="svgCodeEditor" class="flex-1 w-full bg-darkBg text-emerald-400 font-mono p-3 resize-none border-0"></textarea>
+                    </div>
+                    <div class="w-1/2 flex flex-col">
+                        <div class="bg-gray-900/80 px-3 py-1 text-[10px] text-gray-500 border-b border-borderCool">GSAP 物理轨迹代码 (JavaScript)</div>
+                        <textarea id="gsapCodeEditor" class="flex-1 w-full bg-darkBg text-blue-400 font-mono p-3 resize-none border-0"></textarea>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="w-[450px] bg-panelBg flex flex-col flex-shrink-0 overflow-hidden">
+            <div class="p-4 border-b border-borderCool">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold text-gray-400">16:9 物理轨迹沙盒窗口</span>
+                    <span class="text-[10px] text-gray-500">1920 × 1080 适配</span>
+                </div>
+                <div class="relative w-full aspect-video bg-black rounded border border-borderCool overflow-hidden shadow-2xl">
+                    <iframe id="previewSandbox" class="w-full h-full bg-transparent border-0" sandbox="allow-scripts allow-same-origin"></iframe>
+                </div>
+                <div class="mt-3 flex items-center space-x-3 text-xs">
+                    <button id="playAnimationBtn" class="bg-gray-800 hover:bg-gray-700 p-1.5 rounded text-gray-300">播放</button>
+                    <button id="pauseAnimationBtn" class="bg-gray-800 hover:bg-gray-700 p-1.5 rounded text-gray-300">暂停</button>
+                    <div class="flex-1 flex items-center space-x-2">
+                        <input id="animationTimelineScrubber" type="range" min="0" max="100" value="0" class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                        <span id="durationDisplay" class="text-[10px] text-gray-500 font-mono">0.0s / 0.0s</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 flex flex-col overflow-hidden border-t border-borderCool">
+                <div class="bg-gray-900 px-4 py-2 border-b border-borderCool flex items-center justify-between">
+                    <h3 class="text-xs font-bold text-gray-400">AI 伴跑师 (单独调教当前分镜代码)</h3>
+                </div>
+                <div id="aiChatBubbleHistory" class="flex-1 p-4 overflow-y-auto space-y-3 text-xs">
+                    <div class="bg-gray-800/40 p-3 rounded-lg border border-borderCool">
+                        <p class="text-gray-300">👋 <b>你好！我是你的高级 SVG-GSAP 动画调教助手。</b></p>
+                    </div>
+                </div>
+                <div class="p-3 bg-gray-900 border-t border-borderCool flex items-center space-x-2">
+                    <input id="aiChatInputText" type="text" placeholder="对 AI 说：把核心节点变成蓝色闪烁效果..." class="flex-1 bg-darkBg border border-borderCool px-3 py-2 rounded text-xs">
+                    <button id="sendAiChatBtn" class="bg-accentPurple hover:bg-fuchsia-700 text-white text-xs px-4 py-2 rounded font-semibold">发送</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="toastNotification" class="fixed bottom-6 right-6 z-50 bg-gray-900 border border-borderCool text-gray-200 text-xs px-4 py-3 rounded-lg shadow-2xl hidden max-w-sm">
+        <div class="flex items-center space-x-3">
+            <span id="toastIcon">💡</span>
+            <p id="toastMsg" class="font-medium"></p>
+        </div>
+    </div>
+
+    <script>
+        // 全局状态数据
+        let appState = {
+            apiConfig: { provider: 'deepseek', endpoint: 'https://api.deepseek.com/v1', key: '', model: 'deepseek-chat' },
+            storyboard: [],
+            activeSceneIndex: null
+        };
+
+        // 安全地初始化和绑定事件，防止脚本卡死
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                loadConfigFromLocalStorage();
+                setupEventListeners();
+                initSandboxTemplate();
+                showToast("🚀 平台加载完毕，环境就绪！", "🟢");
+            } catch (e) {
+                console.error("初始化事件崩溃:", e);
+            }
         });
 
-        container.appendChild(card);
-      });
-    }
+        function loadConfigFromLocalStorage() {
+            const cached = localStorage.getItem('svg_animate_api_config');
+            if (cached) {
+                appState.apiConfig = JSON.parse(cached);
+                document.getElementById('apiProvider').value = appState.apiConfig.provider || 'deepseek';
+                document.getElementById('apiEndpoint').value = appState.apiConfig.endpoint || '';
+                document.getElementById('apiKey').value = appState.apiConfig.key || '';
+                document.getElementById('apiModel').value = appState.apiConfig.model || '';
+            } else {
+                updateProviderDefaults('deepseek');
+            }
+        }
 
-    function calculateDuration(text) {
-      return Math.max(3.0, parseFloat((text.trim().length * 0.3).toFixed(2)));
-    }
+        function saveConfigToLocalStorage() {
+            appState.apiConfig.provider = document.getElementById('apiProvider').value;
+            appState.apiConfig.endpoint = document.getElementById('apiEndpoint').value;
+            appState.apiConfig.key = document.getElementById('apiKey').value;
+            appState.apiConfig.model = document.getElementById('apiModel').value;
+            localStorage.setItem('svg_animate_api_config', JSON.stringify(appState.apiConfig));
+            showToast("✅ API 配置保存成功！", "🟢");
+        }
 
-    function selectScene(sceneId) {
-      if (isPlaying) {
-        isPlaying = false;
-        cancelAnimationFrame(requestFrameId);
-        document.getElementById('btn-play').innerText = "播放预览";
-      }
-
-      activeSceneId = sceneId;
-      const scene = project.scenes.find(s => s.sceneId === sceneId);
-      
-      document.getElementById('svg-elements-editor').value = scene.svgElements;
-      document.getElementById('gsap-code-editor').value = scene.animationCode;
-      document.getElementById('active-visual-prompt').value = scene.visualPrompt;
-
-      renderStoryboardUI();
-      loadSceneInIframe(scene);
-    }
-
-    function loadSceneInIframe(scene) {
-      const sandboxTemplate = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"><\/script>
-          <style>
-            body { margin: 0; background: #090d16; width: 1920px; height: 1080px; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-            svg { width: 100%; height: 100%; }
-          </style>
-        </head>
-        <body>
-          <svg id="canvas" viewBox="0 0 1920 1080">
-            ${scene.svgElements}
-          </svg>
-          <script>
-            const tl = gsap.timeline({ paused: true });
-            window.__currentTimeline = tl;
-            
-            // 物理运动轨迹
-            ${scene.animationCode}
-
-            window.addEventListener('message', (e) => {
-              if (e.data && e.data.type === 'SEEK_TIME') {
-                tl.seek(e.data.time);
-              }
+        function setupEventListeners() {
+            // 开关 API 面板
+            document.getElementById('toggleConfigBtn').addEventListener('click', (e) => {
+                e.preventDefault();
+                const panel = document.getElementById('apiConfigPanel');
+                panel.classList.toggle('hidden');
             });
-          <\/script>
-        </body>
-        </html>
-      `;
-      const iframe = document.getElementById('preview-sandbox');
-      iframe.srcdoc = sandboxTemplate;
 
-      const slider = document.getElementById('timeline-slider');
-      slider.max = scene.durationSeconds;
-      document.getElementById('time-display').innerText = `0.00s / ${scene.durationSeconds.toFixed(2)}s`;
-      
-      setTimeout(() => scrubTimeline(0), 100);
-    }
+            document.getElementById('saveConfigBtn').addEventListener('click', saveConfigToLocalStorage);
+            document.getElementById('apiProvider').addEventListener('change', (e) => updateProviderDefaults(e.target.value));
+            document.getElementById('chunkScriptBtn').addEventListener('click', handleScriptChunkingAndParsing);
+            document.getElementById('updatePreviewBtn').addEventListener('click', applyEditorCodeToSandbox);
+            document.getElementById('playAnimationBtn').addEventListener('click', () => sendToSandbox({type: 'play'}));
+            document.getElementById('pauseAnimationBtn').addEventListener('click', () => sendToSandbox({type: 'pause'}));
+            
+            document.getElementById('animationTimelineScrubber').addEventListener('input', (e) => {
+                const progress = e.target.value / 100;
+                sendToSandbox({type: 'seek', progress: progress});
+                updateTimelineProgressLabel(progress);
+            });
 
-    function updateAnimationPreview() {
-      if (!activeSceneId) return;
-      const scene = project.scenes.find(s => s.sceneId === activeSceneId);
-      
-      scene.svgElements = document.getElementById('svg-elements-editor').value;
-      scene.animationCode = document.getElementById('gsap-code-editor').value;
-      scene.visualPrompt = document.getElementById('active-visual-prompt').value;
+            document.getElementById('sendAiChatBtn').addEventListener('click', sendAiChatMessage);
+            document.getElementById('aiChatInputText').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendAiChatMessage(); });
+        }
 
-      loadSceneInIframe(scene);
-    }
+        function updateProviderDefaults(provider) {
+            const endpoint = document.getElementById('apiEndpoint');
+            const model = document.getElementById('apiModel');
+            switch(provider) {
+                case 'deepseek':
+                    endpoint.value = "https://api.deepseek.com/v1"; model.value = "deepseek-chat"; break;
+                case 'github-models':
+                    endpoint.value = "https://models.inference.ai.azure.com"; model.value = "gpt-4o-mini"; break;
+                case 'zhipu':
+                    endpoint.value = "https://open.bigmodel.cn/api/paas/v4"; model.value = "glm-4-flash"; break;
+                case 'minimax':
+                    endpoint.value = "https://api.minimax.chat/v1"; model.value = "abab6.5-chat"; break;
+                case 'openai':
+                    endpoint.value = "https://api.openai.com/v1"; model.value = "gpt-4o-mini"; break;
+                case 'openrouter':
+                    endpoint.value = "https://openrouter.ai/api/v1"; model.value = "google/gemini-pro-1.5"; break;
+            }
+        }
 
-    function scrubTimeline(time) {
-      document.getElementById('timeline-slider').value = time;
-      const maxTime = parseFloat(document.getElementById('timeline-slider').max);
-      document.getElementById('time-display').innerText = `${parseFloat(time).toFixed(2)}s / ${maxTime.toFixed(2)}s`;
-      
-      const iframe = document.getElementById('preview-sandbox');
-      if (iframe.contentWindow) {
-        iframe.contentWindow.postMessage({ type: 'SEEK_TIME', time: parseFloat(time) }, '*');
-      }
-    }
+        function chunkTextIntoSegments(text, limit = 2000) {
+            const segments = [];
+            let remaining = text.trim();
+            while (remaining.length > 0) {
+                if (remaining.length <= limit) { segments.push(remaining); break; }
+                let chunk = remaining.substring(0, limit);
+                let lastN = chunk.lastIndexOf('\n');
+                if (lastN > 0) {
+                    segments.push(remaining.substring(0, lastN).trim());
+                    remaining = remaining.substring(lastN).trim();
+                } else {
+                    let lastP = Math.max(chunk.lastIndexOf('。'), chunk.lastIndexOf('？'), chunk.lastIndexOf('！'));
+                    if (lastP > 0) {
+                        segments.push(remaining.substring(0, lastP + 1).trim());
+                        remaining = remaining.substring(lastP + 1).trim();
+                    } else {
+                        segments.push(remaining.substring(0, limit).trim());
+                        remaining = remaining.substring(limit).trim();
+                    }
+                }
+            }
+            return segments;
+        }
 
-    function togglePlayback() {
-      const playBtn = document.getElementById('btn-play');
-      const slider = document.getElementById('timeline-slider');
+        async function handleScriptChunkingAndParsing() {
+            const rawText = document.getElementById('rawScriptText').value.trim();
+            if (!rawText) { showToast("❌ 请先粘贴文案！", "🔴"); return; }
+            if (!appState.apiConfig.key) { showToast("🔑 请先配置 API Key！", "🟡"); document.getElementById('apiConfigPanel').classList.remove('hidden'); return; }
 
-      if (isPlaying) {
-        isPlaying = false;
-        cancelAnimationFrame(requestFrameId);
-        playBtn.innerText = "播放预览";
-      } else {
-        isPlaying = true;
-        playBtn.innerText = "暂停播放";
-        
-        const currentProgress = parseFloat(slider.value);
-        const maxTime = parseFloat(slider.max);
-        
-        const startOffset = currentProgress >= maxTime? 0 : currentProgress;
-        playStartTime = performance.now() - startOffset * 1000;
-        
-        tick();
-      }
-    }
+            const chunks = chunkTextIntoSegments(rawText, 2000);
+            const statusPanel = document.getElementById('processingStatus');
+            const bar = document.getElementById('progressBar');
+            const percent = document.getElementById('progressPercent');
+            const log = document.getElementById('statusLog');
 
-    function tick() {
-      if (!isPlaying) return;
-      const slider = document.getElementById('timeline-slider');
-      const elapsed = (performance.now() - playStartTime) / 1000;
-      const maxTime = parseFloat(slider.max);
+            statusPanel.classList.remove('hidden');
+            appState.storyboard = [];
+            renderStoryboardList();
 
-      if (elapsed >= maxTime) {
-        scrubTimeline(maxTime);
-        isPlaying = false;
-        document.getElementById('btn-play').innerText = "播放预览";
-        return;
-      }
+            for (let i = 0; i < chunks.length; i++) {
+                let pct = Math.round((i / chunks.length) * 100);
+                bar.style.width = `${pct}%`;
+                percent.innerText = `${pct}%`;
+                log.innerHTML += `<br>[请求中...] 正在解析第 ${i+1}/${chunks.length} 块文案...`;
+                log.scrollTop = log.scrollHeight;
 
-      scrubTimeline(elapsed);
-      requestFrameId = requestAnimationFrame(tick);
-    }
+                try {
+                    const sceneJson = await requestStoryboardFromLLM(chunks[i], i + 1, chunks.length);
+                    const parsed = JSON.parse(sceneJson);
+                    parsed.forEach(scene => {
+                        let duration = parseFloat(( (scene.text || "").length / 3.3 ).toFixed(1));
+                        appState.storyboard.push({
+                            id: appState.storyboard.length + 1,
+                            text: scene.text || "",
+                            visualDescription: scene.visualDescription || "科技蓝色创意抽象背景",
+                            duration: duration > 2 ? duration : 5,
+                            svg: "", css: "", js: "", chatHistory: []
+                        });
+                    });
+                    renderStoryboardList();
+                } catch (err) {
+                    log.innerHTML += `<br><span class="text-red-500">[错误] 第 ${i+1} 块解析失败: ${err.message}</span>`;
+                }
+            }
+            bar.style.width = '100%';
+            percent.innerText = '100%';
+            log.innerHTML += `<br>🎉 分镜拆分完成！`;
+            showToast("🎉 脚本分镜切分成功！", "🟢");
+        }
 
-    // API 配置与模态控制
-    function toggleSettingsModal(show) {
-      document.getElementById('settings-modal').style.display = show? 'flex' : 'none';
-    }
+        async function requestStoryboardFromLLM(textChunk, current, total) {
+            const sysPrompt = `你是一个顶级科普分镜师。请把这段文案切分为适合科技/理学网格、图表动画的场景卡。必须返回严格的 JSON 数组格式，没有任何 Markdown 标记：
+[{"text": "配音原文", "visualDescription": "画面图形运动创意描述"}]
+不要返回任何别的东西。以下是文案：\n${textChunk}`;
 
-    function onApiProviderChange(val) {
-      const preset = apiPresets[val];
-      document.getElementById('api-endpoint').value = preset.endpoint;
-      document.getElementById('api-model').value = preset.model;
-    }
+            const messages = [{ role: 'user', content: sysPrompt }];
+            const res = await fetchChatCompletions(messages);
+            return cleanJsonMarkdown(res);
+        }
 
-    function saveApiSettings() {
-      toggleSettingsModal(false);
-      alert("API 配置保存成功！");
-    }
+        function cleanJsonMarkdown(text) {
+            let clean = text.trim();
+            if (clean.startsWith('```json')) clean = clean.substring(7);
+            else if (clean.startsWith('```')) clean = clean.substring(3);
+            if (clean.endsWith('```')) clean = clean.substring(0, clean.length - 3);
+            return clean.trim();
+        }
 
-    function triggerFfmpegExport() {
-      alert("视频捕获管道触发成功！在 Electron 本地宿主应用下运行时，此动作将调用无头浏览器以确定性 seek 时间轴（${project.fps} FPS），进行快照截图并直接推入 FFmpeg，生成高清 MP4！");
-    }
+        function renderStoryboardList() {
+            const container = document.getElementById('sceneCardContainer');
+            document.getElementById('sceneCountText').innerText = `共 ${appState.storyboard.length} 个分镜`;
+            if (appState.storyboard.length === 0) {
+                container.innerHTML = `<div class="text-xs text-gray-500 text-center w-full py-12">暂无分镜脚本</div>`;
+                return;
+            }
+            container.innerHTML = "";
+            appState.storyboard.forEach((scene, index) => {
+                const isActive = appState.activeSceneIndex === index;
+                const isGen = scene.svg !== "";
+                const card = document.createElement('div');
+                card.className = `w-72 flex-shrink-0 bg-panelBg border-2 p-3 rounded-lg flex flex-col justify-between transition-all ${isActive ? 'border-accentBlue ring-2 ring-blue-900/40' : 'border-borderCool'}`;
+                card.style.height = "210px";
+                card.innerHTML = `
+                    <div class="flex justify-between items-center text-[10px] font-bold text-gray-400 mb-1">
+                        <span>场景 #${scene.id}</span>
+                        <div><input type="number" step="0.1" value="${scene.duration}" class="w-10 bg-darkBg border border-borderCool text-center rounded text-[10px]" onchange="updateSceneDuration(${index}, this.value)"> 秒</div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto text-[11px] text-gray-300 space-y-1 cursor-pointer" onclick="selectActiveScene(${index})">
+                        <div class="line-clamp-3" ondblclick="editSceneText(${index}, 'text')">${scene.text}</div>
+                        <div class="text-gray-400 italic bg-darkBg p-1 rounded line-clamp-2" ondblclick="editSceneText(${index}, 'visualDescription')">🎥 ${scene.visualDescription}</div>
+                    </div>
+                    <div class="flex justify-between items-center mt-2 pt-2 border-t border-borderCool">
+                        <span class="text-[9px] ${isGen ? 'text-accentGreen':'text-yellow-600'}">${isGen ? '● 已有动画':'○ 待生成'}</span>
+                        <button onclick="generateAnimationForScene(${index})" class="bg-accentBlue text-white text-[10px] px-2 py-0.5 rounded">生成动画</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
 
-    // 初始化加载
-    window.onload = () => {
-      selectScene("scene-1");
-    };
-  </script>
+        window.updateSceneDuration = function(i, v) { appState.storyboard[i].duration = parseFloat(v) || 5; };
+        window.editSceneText = function(i, f) {
+            let n = prompt("编辑内容:", appState.storyboard[i][f]);
+            if(n) { appState.storyboard[i][f] = n; renderStoryboardList(); }
+        };
+
+        window.generateAnimationForScene = async function(index) {
+            selectActiveScene(index);
+            const scene = appState.storyboard[index];
+            showToast(`🚀 正在让 AI 编写动画代码...`, "🔮");
+
+            const prompt = `你是一个精通 SVG 和 GSAP 3 物理动效的专家。请根据以下画面描述，编写能在 16:9 画布自适应的动画包。
+描述：${scene.visualDescription}
+时长要求：必须在整个动画的持续内均匀播放完毕（持续时长大约为：${scene.duration}秒）。
+必须定义且只能定义全局时间轴：window.__timeline = gsap.timeline({ paused: true }); 所有运动Tween追加在此之上。
+必须返回以下严格格式的 JSON 字符串：
+{"svg": "<svg viewBox=\\"0 0 1920 1080\\">...</svg>", "css": "样式", "js": "window.__timeline = ...;"}
+不要返回任何多余文字。`;
+
+            try {
+                const res = await fetchChatCompletions([{ role: 'user', content: prompt }]);
+                const parsed = JSON.parse(cleanJsonMarkdown(res));
+                scene.svg = parsed.svg || ""; scene.css = parsed.css || ""; scene.js = parsed.js || "";
+                document.getElementById('svgCodeEditor').value = scene.svg;
+                document.getElementById('gsapCodeEditor').value = scene.js;
+                renderStoryboardList();
+                applyEditorCodeToSandbox();
+                showToast("🎉 动画代码已装载！", "🟢");
+            } catch (err) {
+                showToast("❌ 格式解析失败，请点击重新生成", "🔴");
+            }
+        };
+
+        async function sendAiChatMessage() {
+            if (appState.activeSceneIndex === null) { showToast("👉 请先选中一个分镜场景", "🟡"); return; }
+            const input = document.getElementById('aiChatInputText');
+            const val = input.value.trim();
+            if (!val) return;
+
+            appendChatBubble('user', val);
+            input.value = "";
+            const bubbleId = appendChatBubble('assistant', '思考修改中...');
+            const scene = appState.storyboard[appState.activeSceneIndex];
+
+            const p = `当前SVG:\n${scene.svg}\n当前JS:\n${scene.js}\n用户修改意见：${val}\n请修改并最终在尾部附带 \`\`\`json 格式的完整代码块，包含 svg, css, js 三项。`;
+
+            try {
+                const res = await fetchChatCompletions([{ role: 'user', content: p }]);
+                const match = res.match(/```json\s*([\s\S]*?)\s*```/);
+                if (match && match[1]) {
+                    const parsed = JSON.parse(match[1].trim());
+                    scene.svg = parsed.svg; scene.css = parsed.css; scene.js = parsed.js;
+                    document.getElementById('svgCodeEditor').value = scene.svg;
+                    document.getElementById('gsapCodeEditor').value = scene.js;
+                    applyEditorCodeToSandbox();
+                }
+                document.getElementById(bubbleId).innerHTML = `<p class="leading-relaxed">${res.split('```json')[0].replace(/\n/g, '<br>')}</p>`;
+                renderStoryboardList();
+            } catch(e) {
+                document.getElementById(bubbleId).innerText = "❌ 调教失败，请再试一次";
+            }
+        }
+
+        function appendChatBubble(role, txt) {
+            const box = document.getElementById('aiChatBubbleHistory');
+            const id = 'b_' + Date.now();
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = role === 'user' ? 'bg-blue-900/20 p-2 rounded border border-blue-800/40 ml-4' : 'bg-purple-900/10 p-2 rounded border border-purple-800/40 mr-4';
+            div.innerHTML = `<b>${role==='user'?'我':'AI'}：</b>${txt}`;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+            return id;
+        }
+
+        window.navigatorUpdateLabel = function(prog) {
+            const scrubber = document.getElementById('animationTimelineScrubber');
+            if(scrubber) scrubber.value = Math.round(prog * 100);
+            updateTimelineProgressLabel(prog);
+        };
+
+        window.selectActiveScene = function(i) {
+            appState.activeSceneIndex = i;
+            const scene = appState.storyboard[i];
+            document.getElementById('editingSceneTitle').innerText = `分镜场景 #${scene.id}`;
+            document.getElementById('svgCodeEditor').value = scene.svg || "";
+            document.getElementById('gsapCodeEditor').value = scene.js || "";
+            renderStoryboardList();
+            applyEditorCodeToSandbox();
+        };
+
+        async function fetchChatCompletions(msgs) {
+            const config = appState.apiConfig;
+            const headers = { "Content-Type": "application/json" };
+            if (config.key) {
+                // 特殊处理：如果是 GitHub Models，头信息需要使用 User-Agent 或特定授权
+                headers["Authorization"] = `Bearer ${config.key}`;
+            }
+            let url = config.endpoint.endsWith('/chat/completions') ? config.endpoint : `${config.endpoint}/chat/completions`;
+            
+            // 解决跨域或非标准接口的终极备用转换
+            const response = await fetch(url, {
+                method: "POST", headers: headers,
+                body: JSON.stringify({ model: config.model, messages: msgs, temperature: 0.2 })
+            });
+            if (!response.ok) throw new Error("API握手失败");
+            const data = await response.json();
+            return data.choices[0].message.content;
+        }
+
+        let sandboxTemplate = "";
+        function initSandboxTemplate() {
+            sandboxTemplate = `<!DOCTYPE html><html><head><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#090d16;display:flex;justify-content:center;align-items:center;}{CSS}</style><script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"><\/script><script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/TextPlugin.min.js"><\/script><script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/MotionPathPlugin.min.js"><\/script></head><body><div style="width:100%;height:100%;">{SVG}</div><script>gsap.registerPlugin(TextPlugin,MotionPathPlugin);window.__timeline=gsap.timeline({paused:true});window.addEventListener('message',(e)=>{const d=e.data;if(d.type==='seek')window.__timeline.progress(d.progress);else if(d.type==='play')window.__timeline.play();else if(d.type==='pause')window.__timeline.pause();});window.__timeline.eventCallback("onUpdate",()=>{window.parent.postMessage({type:'onUpdate',progress:window.__timeline.progress()},'*');});try{{JS}}catch(err){console.error(err);}</script></body></html>`;
+            
+            window.addEventListener('message', (e) => {
+                if (e.data && e.data.type === 'onUpdate') {
+                    window.navigatorUpdateLabel(e.data.progress);
+                }
+            });
+        }
+
+        function applyEditorCodeToSandbox() {
+            if (appState.activeSceneIndex === null) return;
+            const scene = appState.storyboard[appState.activeSceneIndex];
+            const svg = document.getElementById('svgCodeEditor').value;
+            const js = document.getElementById('gsapCodeEditor').value;
+            let src = sandboxTemplate.replace('{CSS}', scene.css || "").replace('{SVG}', svg).replace('{JS}', js);
+            document.getElementById('previewSandbox').srcdoc = src;
+            updateTimelineProgressLabel(0);
+        }
+
+        function sendToSandbox(msg) {
+            const frame = document.getElementById('previewSandbox');
+            if(frame && frame.contentWindow) frame.contentWindow.postMessage(msg, '*');
+        }
+
+        function updateTimelineProgressLabel(p) {
+            if (appState.activeSceneIndex === null) return;
+            const dur = appState.storyboard[appState.activeSceneIndex].duration;
+            document.getElementById('durationDisplay').innerText = `${(p*dur).toFixed(1)}s / ${dur.toFixed(1)}s`;
+        }
+
+        function showToast(m, icon = "💡") {
+            const t = document.getElementById('toastNotification');
+            document.getElementById('toastMsg').innerText = m;
+            document.getElementById('toastIcon').innerText = icon;
+            t.classList.remove('hidden');
+            setTimeout(() => t.classList.add('hidden'), 4000);
+        }
+    </script>
 </body>
 </html>

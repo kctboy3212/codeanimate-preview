@@ -6,8 +6,8 @@
   <title>CodeAnimate AI - 互动科普视频工作台</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+ .no-scrollbar::-webkit-scrollbar { display: none; }
+ .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     iframe { background-color: #090d16; }
   </style>
 </head>
@@ -374,7 +374,7 @@ ${rawTextChunks[i]}`;
 3. 绝对不准使用任何带 Math.random()、Date.now() 等具有随机性质的代码，以保证 Seeking 的离散确定性 [26]。
 
 【输出格式约束】：
-你必须且只能返回标准的 JSON 格式，绝对不准附带 Markdown 包裹标识：
+你必须且只能返回标准的 JSON 格式，绝对不带 Markdown 包裹标识：
 {
   "svg_elements": "对应的 SVG 节点标签 markup 代码",
   "gsap_code": "驱动以上 SVG 的 GSAP 动作序列，注意只能使用 tl 句柄，如 tl.from('#abc', { opacity:0, duration: 1 })"
@@ -491,8 +491,8 @@ ${userMessage}`;
       if (!result) {
         // 仿真器修改：直接替换填充色为亮紫色，演示 100% 动态改色
         const modifiedGsap = currentGsap
-         .replace('fill: "#ef4444"', 'fill: "#c084fc"')
-         .replace('fill: "#10b981"', 'fill: "#c084fc"');
+        .replace('fill: "#ef4444"', 'fill: "#c084fc"')
+        .replace('fill: "#10b981"', 'fill: "#c084fc"');
         result = {
           svg_elements: currentSvg.replace('fill="#10b981"', 'fill="#c084fc"').replace('fill="#ef4444"', 'fill="#c084fc"'),
           gsap_code: modifiedGsap
@@ -517,10 +517,10 @@ ${userMessage}`;
     function switchLeftTab(tab) {
       const isScript = tab === 'script';
       document.getElementById('tab-script-btn').className = isScript 
-      ? 'flex-1 text-xs font-bold text-blue-400 border-b-2 border-blue-500' 
+     ? 'flex-1 text-xs font-bold text-blue-400 border-b-2 border-blue-500' 
         : 'flex-1 text-xs font-bold text-slate-500';
       document.getElementById('tab-storyboard-btn').className =!isScript 
-      ? 'flex-1 text-xs font-bold text-blue-400 border-b-2 border-blue-500' 
+     ? 'flex-1 text-xs font-bold text-blue-400 border-b-2 border-blue-500' 
         : 'flex-1 text-xs font-bold text-slate-500';
 
       document.getElementById('view-script').style.display = isScript? 'flex' : 'none';
@@ -537,7 +537,7 @@ ${userMessage}`;
         const card = document.createElement('div');
         card.className = `p-4 border rounded-xl transition cursor-pointer flex flex-col gap-2 ${
           isActive 
-          ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-950/20' 
+         ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-950/20' 
             : 'border-slate-800 bg-slate-900/40 hover:bg-slate-900/85 hover:border-slate-700'
         }`;
         
